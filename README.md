@@ -127,7 +127,7 @@ All variables are read from `~/.config/back2base/env` (or your shell, for proces
 | `BACK2BASE_ANTHROPIC_API_KEY` | Anthropic API key (pay-as-you-go). Alternative to the OAuth token. |
 | `BACK2BASE_ANTHROPIC_AUTH_TOKEN` | Custom auth bearer token for an Anthropic-compatible endpoint. |
 | `BACK2BASE_ANTHROPIC_BASE_URL` | Custom Anthropic-compatible base URL (e.g. a self-hosted proxy). |
-| `BACK2BASE_PROFILE` | Default MCP profile to load (`full`, `go`, `frontend`, `infra`, …). `last` resolves to the last profile used in this namespace. |
+| `BACK2BASE_PROFILE` | MCP profile to load. Defaults to `auto` (fingerprint the workspace). Set a name (`full`, `go`, `frontend`, `infra`, `general`, …) to pin one; `last` resolves to the last profile used in this namespace. |
 | `BACK2BASE_MODEL` | Force a specific Claude model alias. Unset = the selected profile's pinned model (default `claude-opus-4-8[1m]`). |
 | `BACK2BASE_DATA_DIR` | Host directory for persistent plans + memories. See [below](#persisting-plans-and-memories). |
 | `BACK2BASE_MANAGED_SETTINGS_DIR` | Override the host path probed for [enterprise managed policy](#enterprise-managed-policy). |
@@ -142,16 +142,17 @@ Optional per-tool MCP credentials (`GITHUB_TOKEN`, `DD_API_KEY` / `DD_APPLICATIO
 
 ### Profiles and models
 
-A profile narrows which MCP servers (and which model) a session loads. Pick one per run:
+A profile narrows which MCP servers (and which model) a session loads. The default is **`auto`**, which fingerprints your workspace at startup (e.g. `go.mod` → Go tools, `package.json` → frontend tools, `*.tf` → infra) and loads only the matching servers — keeping the cached tool prefix small and turns fast. Override per run:
 
 ```bash
-oss-back2base --profile go        # backend Go work
+oss-back2base                     # default → auto-detect from the workspace
+oss-back2base --profile go        # force the Go server set
 oss-back2base --profile frontend  # web / TypeScript
+oss-back2base --profile full      # every server (max capability, highest token cost)
 oss-back2base --profile minimal   # filesystem + git only
-oss-back2base                     # no flag → interactive picker on launch
 ```
 
-Built-in profiles: `full`, `go`, `python`, `frontend`, `infra`, `research`, `documentation`, `minimal`. Every profile includes the `core` servers (`filesystem`, `git`). The default model pinned by the profiles is `claude-opus-4-8[1m]`; override per-run with `BACK2BASE_MODEL`. Edit or add profiles in [`back2base-container/defaults/profiles.json`](back2base-container/defaults/profiles.json).
+Built-in profiles: `auto` (default), `full`, `go`, `python`, `frontend`, `infra`, `research`, `documentation`, `general` (lean fallback when nothing is detected), `minimal`. Every profile includes the `core` servers (`filesystem`, `git`). The auto-detected set is the **union** of every matched profile, so polyglot repos still get what they need; an empty/unknown workspace falls back to `general`. The tool list is locked at session start (don't add/remove servers mid-session — it breaks the prompt cache). The default model pinned by the profiles is `claude-opus-4-8[1m]`; override per-run with `BACK2BASE_MODEL`. Edit or add profiles in [`back2base-container/defaults/profiles.json`](back2base-container/defaults/profiles.json).
 
 ### Adding or removing MCP servers
 
