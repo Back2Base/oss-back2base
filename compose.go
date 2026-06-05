@@ -190,9 +190,9 @@ func resolveDataDir(cfg cbConfig) string {
 
 // writeDataDirOverride generates a compose override that bind-mounts
 // <BACK2BASE_DATA_DIR>/plans and /memories (created if absent) at
-// ~/.claude/plans and ~/.claude/memories. Returns "" when the var is unset or
-// the dir is missing (warned to stderr). OSS has no cloud sync, so it's
-// volumes-only.
+// ~/.back2base/plans and ~/.back2base/memories. Returns "" when the var is
+// unset or the dir is missing (warned to stderr). OSS has no cloud sync, so
+// it's volumes-only.
 func writeDataDirOverride(cfg cbConfig) string {
 	dir := resolveDataDir(cfg)
 	if dir == "" {
@@ -212,8 +212,8 @@ func writeDataDirOverride(cfg cbConfig) string {
 		}
 	}
 	body := "services:\n  claude:\n    volumes:\n" +
-		fmt.Sprintf("      - %s:%s\n", memHost, "/home/node/.claude/memories") +
-		fmt.Sprintf("      - %s:%s\n", plansHost, "/home/node/.claude/plans")
+		fmt.Sprintf("      - %s:%s\n", memHost, "/home/node/.back2base/memories") +
+		fmt.Sprintf("      - %s:%s\n", plansHost, "/home/node/.back2base/plans")
 	path := dataDirOverridePath(cfg)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, ":: warn: could not stage data-dir override dir (%v)\n", err)
@@ -223,7 +223,7 @@ func writeDataDirOverride(cfg cbConfig) string {
 		fmt.Fprintf(os.Stderr, ":: warn: could not write data-dir override (%v)\n", err)
 		return ""
 	}
-	fmt.Fprintf(os.Stderr, ":: Mounting data dir: %s → ~/.claude/{plans,memories}\n", dir)
+	fmt.Fprintf(os.Stderr, ":: Mounting data dir: %s → ~/.back2base/{plans,memories}\n", dir)
 	return path
 }
 

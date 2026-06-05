@@ -362,11 +362,11 @@ func TestWriteDataDirOverride(t *testing.T) {
 	}
 	s := string(body)
 	if !strings.Contains(s, filepath.Join(data, "memories")) ||
-		!strings.Contains(s, "/home/node/.claude/memories") {
+		!strings.Contains(s, "/home/node/.back2base/memories") {
 		t.Errorf("missing memories mount:\n%s", s)
 	}
 	if !strings.Contains(s, filepath.Join(data, "plans")) ||
-		!strings.Contains(s, "/home/node/.claude/plans") {
+		!strings.Contains(s, "/home/node/.back2base/plans") {
 		t.Errorf("missing plans mount:\n%s", s)
 	}
 	if _, err := os.Stat(filepath.Join(data, "plans")); err != nil {

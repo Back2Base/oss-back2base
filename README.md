@@ -139,9 +139,11 @@ To verify policy is wired up, run:
 Set `BACK2BASE_DATA_DIR=<path>` (in `~/.config/back2base/env` or your shell) to
 bind-mount a host folder for plans and memories. `oss-back2base` creates
 `plans/` and `memories/` subfolders under it and mounts them at
-`~/.claude/plans` and `~/.claude/memories` inside the container, so they survive
-across sessions and live somewhere you control. Unset, memories stay under the
-back2base state dir and are cleared at each session start.
+`~/.back2base/plans` and `~/.back2base/memories` inside the container. The
+memory tool reads and writes the mounted `memories/` folder directly, so
+memories persist across sessions and live somewhere you control. Unset,
+memories stay under the back2base state dir and are cleared at each session
+start.
 
 ## Repository layout
 
