@@ -1,8 +1,8 @@
 {
-  "_back2base_schema": 4,
+  "_back2base_schema": 5,
   "statusLine": {
     "type": "command",
-    "command": "/opt/back2base/statusline.sh",
+    "command": "bash -c 'export COLUMNS=\"${COLUMNS:-120}\"; exec node /opt/back2base/claude-hud/index.js --extra-cmd /opt/back2base/statusline-extra.sh'",
     "padding": 0
   }
 }

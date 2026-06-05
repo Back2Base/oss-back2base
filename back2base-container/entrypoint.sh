@@ -160,68 +160,10 @@ _phase2_workspace_setup() {
     export GIT_SSH_COMMAND="ssh -F $HOME/.ssh_local/config"
   fi
 
-  # Memory directories.
-  #
-  # Two paths are involved and they MUST point at the same physical files:
-  #
-  #   1. The "namespaced" path under MEMORY_NAMESPACE (human-friendly, derived
-  #      from the git remote basename, e.g. ~/.claude/projects/myrepo/memory).
-  #
-  #   2. Claude Code's auto-memory path, which it derives from the current
-  #      working directory by replacing every '/' with '-'
-  #      (e.g. /workspace → ~/.claude/projects/-workspace/memory). This is
-  #      where Claude Code reads MEMORY.md from at session start and writes
-  #      new memories to during the session.
-  #
-  # Without alignment, memories saved under (1) land outside what Claude
-  # Code only reads (2) — they ships past each other and "memory doesn't
-  # load". We make (1) the canonical store and symlink (2) → (1). If a user
-  # already has real files at (2) from a previous version, migrate them into
-  # (1) once before replacing (2) with the symlink.
-  if [ -n "${MEMORY_NAMESPACE:-}" ]; then
-    ns_memory_dir="$HOME/.claude/projects/${MEMORY_NAMESPACE}/memory"
-    mkdir -p "$ns_memory_dir"
-
-    # Always start with a blank memory folder so old session memory does not
-    # silently bleed into a new session via Claude Code's MEMORY.md autoload.
-    if [ -n "$(ls -A "$ns_memory_dir" 2>/dev/null)" ]; then
-      rm -rf "${ns_memory_dir:?}"/* "${ns_memory_dir:?}"/.[!.]* 2>/dev/null || true
-    fi
-
-    # Claude Code's project dir name = $PWD with '/' → '-'. Compute against
-    # the cwd at this point in the entrypoint, which is what claude inherits
-    # via the final `exec "$@"` below (after any /repos cd above).
-    cwd_dir_name="${PWD//\//-}"
-    cc_memory_dir="$HOME/.claude/projects/${cwd_dir_name}/memory"
-
-    # Export the absolute project dir so daemons (power-steering,
-    # session-snapshot) can find Claude Code's session JSONLs without
-    # re-deriving the slug. Session files live at depth 1 under this dir.
-    export CLAUDE_PROJECT_DIR="$HOME/.claude/projects/${cwd_dir_name}"
-
-    if [ "$cc_memory_dir" != "$ns_memory_dir" ]; then
-      mkdir -p "$(dirname "$cc_memory_dir")"
-      if [ -L "$cc_memory_dir" ]; then
-        # Already a symlink — repoint only if it's stale (e.g. namespace
-        # changed because the user switched MEMORY_NAMESPACE override).
-        if [ "$(readlink "$cc_memory_dir")" != "$ns_memory_dir" ]; then
-          ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-        fi
-      elif [ -d "$cc_memory_dir" ]; then
-        # Real directory left over from before the alignment was added.
-        # Migrate any existing files into the namespaced location, then
-        # replace with a symlink. cp -an preserves perms (-a) and never
-        # clobbers existing files in the destination (-n).
-        if [ -n "$(ls -A "$cc_memory_dir" 2>/dev/null)" ]; then
-          cp -an "$cc_memory_dir"/. "$ns_memory_dir"/ 2>/dev/null || true
-        fi
-        rm -rf "$cc_memory_dir"
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      else
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      fi
-    fi
-  fi
+  # Memory-path alignment — see lib/memory-align.sh. Sourced so the logic is
+  # unit-testable (test/memory-align.bats); entrypoint just invokes it here.
+  . /opt/back2base/memory-align.sh
+  b2b_align_memory_dir
 
   # Path-naming sentinel. Background daemon: 30s after launch, verifies that
   # Claude Code wrote its session JSONL under the directory name we predicted

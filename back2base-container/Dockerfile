@@ -60,6 +60,10 @@ COPY --chown=node:node --chmod=0755 lib/firewall-refresh.sh /opt/back2base/firew
 # symlink lands in the wrong place; this catches it loudly.
 COPY --chown=node:node --chmod=0755 lib/path-sentinel.sh /opt/back2base/path-sentinel.sh
 
+# Memory-path alignment lib — sourced by entrypoint.sh and unit-tested by
+# test/memory-align.bats. Defines b2b_align_memory_dir.
+COPY --chown=node:node lib/memory-align.sh /opt/back2base/memory-align.sh
+
 # CLAUDE.md renderer (stdlib Python). Replaces the bash+jq generate_claude_md
 # function in entrypoint.sh. Reassembles ~/.claude/CLAUDE.md from the template
 # and the live mcp.json/commands dir on every container start.
@@ -81,9 +85,13 @@ COPY --chown=node:node lib/prelaunch-prompt.txt /opt/back2base/prelaunch-prompt.
 # skills are usable without a Skill tool roundtrip. Stdlib Python only.
 COPY --chown=node:node --chmod=0755 lib/render-skill-preplan.py /opt/back2base/render-skill-preplan.py
 
-# Cold-start phase helpers + in-session statusLine renderer.
+# Cold-start phase helpers + in-session statusLine.
 COPY --chown=node:node lib/status.sh /opt/back2base/status.sh
-COPY --chown=node:node --chmod=0755 lib/statusline.sh /opt/back2base/statusline.sh
+# claude-hud renders the in-session HUD (vendored, precompiled ESM JS, runs on
+# node, zero deps). statusline-extra.sh feeds the back2base namespace segment
+# via --extra-cmd. Vendored from https://github.com/jarrodwatts/claude-hud (MIT).
+COPY --chown=node:node vendor/claude-hud/ /opt/back2base/claude-hud/
+COPY --chown=node:node --chmod=0755 lib/statusline-extra.sh /opt/back2base/statusline-extra.sh
 
 # Power-steering supervisor — async drift-detection daemon. Auths the
 # same way Claude Code does; idles cleanly when no auth is set.
@@ -91,7 +99,7 @@ COPY --chown=node:node --chmod=0755 lib/power-steering.py /opt/back2base/power-s
 COPY --chown=node:node lib/power-steering-prompt.md /opt/back2base/power-steering-prompt.md
 
 # Belt + suspenders for legacy docker builders that silently ignore --chmod.
-RUN chmod +x /opt/back2base/hooks/_common.sh /opt/back2base/hooks/power-steering-drain.sh /opt/back2base/hooks/power-steering-tick.sh /opt/back2base/hooks/claude-md-audit-tally.sh /opt/back2base/hooks/claude-md-audit-trigger.sh /opt/back2base/session-snapshot.sh /opt/back2base/migrate-settings.py /opt/back2base/render-hooks.py /opt/back2base/firewall-refresh.sh /opt/back2base/path-sentinel.sh /opt/back2base/render-claude-md.py /opt/back2base/claude-md-audit.py /opt/back2base/prelaunch-overview.sh /opt/back2base/render-overview.py /opt/back2base/render-skill-preplan.py /opt/back2base/status.sh /opt/back2base/statusline.sh /opt/back2base/power-steering.py 2>/dev/null || true
+RUN chmod +x /opt/back2base/hooks/_common.sh /opt/back2base/hooks/power-steering-drain.sh /opt/back2base/hooks/power-steering-tick.sh /opt/back2base/hooks/claude-md-audit-tally.sh /opt/back2base/hooks/claude-md-audit-trigger.sh /opt/back2base/session-snapshot.sh /opt/back2base/migrate-settings.py /opt/back2base/render-hooks.py /opt/back2base/firewall-refresh.sh /opt/back2base/path-sentinel.sh /opt/back2base/render-claude-md.py /opt/back2base/claude-md-audit.py /opt/back2base/prelaunch-overview.sh /opt/back2base/render-overview.py /opt/back2base/render-skill-preplan.py /opt/back2base/status.sh /opt/back2base/statusline-extra.sh /opt/back2base/power-steering.py 2>/dev/null || true
 
 # Copy firewall and entrypoint scripts
 COPY init-firewall.sh entrypoint.sh /usr/local/bin/

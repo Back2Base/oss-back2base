@@ -338,3 +338,125 @@ func TestBuildRunArgs_AppendsManagedSettingsOverrideWhenPresent(t *testing.T) {
 		t.Fatalf("managed-settings override -f must follow base compose -f: %s", joined)
 	}
 }
+
+func TestWriteDataDirOverride(t *testing.T) {
+	state := t.TempDir()
+	data := t.TempDir()
+	cfg := cbConfig{StateDir: state, EnvFile: filepath.Join(state, "noenv")}
+
+	// writeDataDirOverride logs to stderr on both the success and skip paths;
+	// silence it so `go test` output stays clean.
+	origStderr := os.Stderr
+	devnull, _ := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	os.Stderr = devnull
+	defer func() { os.Stderr = origStderr; devnull.Close() }()
+
+	// Unset → no override, current behavior preserved.
+	t.Setenv("BACK2BASE_DATA_DIR", "")
+	if p := writeDataDirOverride(cfg); p != "" {
+		t.Fatalf("expected no override when unset, got %q", p)
+	}
+
+	// Set to an existing dir → override with both mounts; subdirs created.
+	t.Setenv("BACK2BASE_DATA_DIR", data)
+	p := writeDataDirOverride(cfg)
+	if p == "" {
+		t.Fatal("expected an override path, got empty")
+	}
+	body, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read override: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, filepath.Join(data, "memories")) ||
+		!strings.Contains(s, "/home/node/.back2base/memories") {
+		t.Errorf("missing memories mount:\n%s", s)
+	}
+	if !strings.Contains(s, filepath.Join(data, "plans")) ||
+		!strings.Contains(s, "/home/node/.back2base/plans") {
+		t.Errorf("missing plans mount:\n%s", s)
+	}
+	if _, err := os.Stat(filepath.Join(data, "plans")); err != nil {
+		t.Errorf("plans subdir not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "memories")); err != nil {
+		t.Errorf("memories subdir not created: %v", err)
+	}
+	if strings.Contains(s, ":ro") {
+		t.Errorf("data-dir override must be read-write (got :ro):\n%s", s)
+	}
+	if strings.Contains(s, "\"") {
+		t.Errorf("override YAML must not contain double-quoted paths (breaks compose parsing):\n%s", s)
+	}
+	// OSS has no cloud sync — the override must NOT carry an environment block.
+	if strings.Contains(s, "environment:") {
+		t.Errorf("OSS override should not set environment:\n%s", s)
+	}
+
+	// Set to a non-existent path → no override (warning path).
+	t.Setenv("BACK2BASE_DATA_DIR", filepath.Join(data, "nope"))
+	if p := writeDataDirOverride(cfg); p != "" {
+		t.Errorf("expected no override for missing dir, got %q", p)
+	}
+
+	// Existing dir whose name contains a newline → rejected (a raw newline
+	// would corrupt the generated override YAML).
+	if nlDir := filepath.Join(data, "bad\nname"); os.MkdirAll(nlDir, 0o700) == nil {
+		t.Setenv("BACK2BASE_DATA_DIR", nlDir)
+		if p := writeDataDirOverride(cfg); p != "" {
+			t.Errorf("expected no override for newline path, got %q", p)
+		}
+	}
+}
+
+// TestManagedSettingsOverrideYAMLValid: the generated YAML must NOT contain the
+// per-half-quoted form ("src":"dst":ro) which breaks docker compose config, and
+// the host path — including any spaces — must survive intact in the override.
+func TestManagedSettingsOverrideYAMLValid(t *testing.T) {
+	// Create a host dir with a space in its path (mirrors macOS production path).
+	base := t.TempDir()
+	hostDir := filepath.Join(base, "App Support")
+	if err := os.MkdirAll(hostDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hostDir, "managed-settings.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BACK2BASE_MANAGED_SETTINGS_DIR", hostDir)
+
+	cfg := cbConfig{StateDir: t.TempDir()}
+	path := writeManagedSettingsOverride(cfg)
+	if path == "" {
+		t.Fatal("expected override path, got empty")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read override: %v", err)
+	}
+	body := string(data)
+
+	// The broken per-half-quoted pattern is a quote immediately followed by a
+	// colon immediately followed by another quote: ":"
+	if strings.Contains(body, `":"`) {
+		t.Errorf("override contains per-half-quoted volume pattern (bug: %%q:%%q:ro form):\n%s", body)
+	}
+
+	// The space-containing source path must appear verbatim in the YAML body.
+	src := filepath.Join(hostDir, "managed-settings.json")
+	if !strings.Contains(body, src) {
+		t.Errorf("override does not contain source path %q:\n%s", src, body)
+	}
+}
+
+func TestResolveDataDirEnvFileFallback(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, "env")
+	if err := os.WriteFile(envFile, []byte("BACK2BASE_DATA_DIR="+dir+"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	cfg := cbConfig{StateDir: dir, EnvFile: envFile}
+	t.Setenv("BACK2BASE_DATA_DIR", "") // process env empty → must fall back to the file
+	if got := resolveDataDir(cfg); got != dir {
+		t.Errorf("resolveDataDir: want %q from env file, got %q", dir, got)
+	}
+}

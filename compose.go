@@ -145,7 +145,7 @@ func writeManagedSettingsOverride(cfg cbConfig) string {
 		if _, err := os.Stat(m.src); err != nil {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("      - %q:%q:ro", m.src, m.dst))
+		lines = append(lines, fmt.Sprintf("      - %q", m.src+":"+m.dst+":ro"))
 	}
 	if len(lines) == 0 {
 		return ""
@@ -163,6 +163,78 @@ func writeManagedSettingsOverride(cfg cbConfig) string {
 	return path
 }
 
+// dataDirOverridePath is where writeDataDirOverride stages its generated
+// compose override fragment.
+func dataDirOverridePath(cfg cbConfig) string {
+	return filepath.Join(cfg.StateDir, "run", "data-dir-override.yml")
+}
+
+// resolveDataDir returns the host dir for the plans + memories mount, or ""
+// when unset. Process env wins over the BACK2BASE_DATA_DIR key in the env file;
+// a leading "~/" is expanded to $HOME.
+func resolveDataDir(cfg cbConfig) string {
+	v := strings.TrimSpace(os.Getenv("BACK2BASE_DATA_DIR"))
+	if v == "" {
+		v = strings.TrimSpace(readEnvFile(cfg.EnvFile)["BACK2BASE_DATA_DIR"])
+	}
+	if v == "" {
+		return ""
+	}
+	if strings.HasPrefix(v, "~/") {
+		if home := os.Getenv("HOME"); home != "" {
+			v = filepath.Join(home, v[2:])
+		}
+	}
+	return v
+}
+
+// writeDataDirOverride generates a compose override that bind-mounts
+// <BACK2BASE_DATA_DIR>/plans and /memories (created if absent) at
+// ~/.back2base/plans and ~/.back2base/memories. Returns "" when the var is
+// unset or the dir is missing (warned to stderr). OSS has no cloud sync, so
+// it's volumes-only.
+func writeDataDirOverride(cfg cbConfig) string {
+	dir := resolveDataDir(cfg)
+	if dir == "" {
+		return ""
+	}
+	// A newline in the path would break the generated override YAML (or let a
+	// crafted value inject extra keys), so reject it rather than emit corrupt
+	// YAML. Unix dir names can legally contain newlines, so the IsDir check
+	// below isn't enough on its own.
+	if strings.ContainsAny(dir, "\r\n") {
+		fmt.Fprintf(os.Stderr, ":: warn: BACK2BASE_DATA_DIR contains a newline — skipping plans/memories mount\n")
+		return ""
+	}
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() {
+		fmt.Fprintf(os.Stderr, ":: warn: BACK2BASE_DATA_DIR %q is not an existing directory — skipping plans/memories mount\n", dir)
+		return ""
+	}
+	plansHost := filepath.Join(dir, "plans")
+	memHost := filepath.Join(dir, "memories")
+	for _, d := range []string{plansHost, memHost} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			fmt.Fprintf(os.Stderr, ":: warn: could not create %q (%v) — skipping plans/memories mount\n", d, err)
+			return ""
+		}
+	}
+	body := "services:\n  claude:\n    volumes:\n" +
+		fmt.Sprintf("      - %s:%s\n", memHost, "/home/node/.back2base/memories") +
+		fmt.Sprintf("      - %s:%s\n", plansHost, "/home/node/.back2base/plans")
+	path := dataDirOverridePath(cfg)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		fmt.Fprintf(os.Stderr, ":: warn: could not stage data-dir override dir (%v)\n", err)
+		return ""
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		fmt.Fprintf(os.Stderr, ":: warn: could not write data-dir override (%v)\n", err)
+		return ""
+	}
+	fmt.Fprintf(os.Stderr, ":: Mounting data dir: %s → ~/.back2base/{plans,memories}\n", dir)
+	return path
+}
+
 type runOpts struct {
 	extraDirs []string
 	prompt    string
@@ -176,6 +248,9 @@ func buildRunArgs(cfg cbConfig, opts runOpts) []string {
 		overrides = append(overrides, p)
 	}
 	if p := writeManagedSettingsOverride(cfg); p != "" {
+		overrides = append(overrides, p)
+	}
+	if p := writeDataDirOverride(cfg); p != "" {
 		overrides = append(overrides, p)
 	}
 	args := baseComposeArgs(cfg, overrides...)

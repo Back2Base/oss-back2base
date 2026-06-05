@@ -58,3 +58,20 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+
+  bats:
+    name: Container scripts (bats, macOS)
+    # macOS is the primary target; run the bats suite on a mac runner so the
+    # container shell scripts (entrypoint, hooks, migrate-settings, firewall
+    # dry-runs, prelaunch overview) are gated on every PR. Run from the repo
+    # root — several tests source back2base-container/entrypoint.sh by a
+    # root-relative path.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats + jq
+        run: brew install bats-core jq
+
+      - name: Run container test suite
+        run: bats back2base-container/test/
