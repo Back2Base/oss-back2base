@@ -11,6 +11,7 @@
 #   2. prune defunct /opt/back2base/memory-sessionstart-hook.sh registration.
 #   3. seed statusLine block.
 #   4. strip hooks block (render-hooks.py owns it from schema 4 on).
+#   5. repoint unmodified back2base statusLine at vendored claude-hud.
 #
 # The script must be idempotent (re-running is a no-op) and tolerant of
 # malformed input (silently exits 0).
@@ -19,7 +20,7 @@ setup() {
   TEST_TMP="$(mktemp -d "${BATS_TMPDIR}/back2base-migrate-settings.XXXXXX")"
   SETTINGS="$TEST_TMP/settings.json"
   SCRIPT="$BATS_TEST_DIRNAME/../lib/migrate-settings.py"
-  CURRENT_SCHEMA=4
+  CURRENT_SCHEMA=5
 }
 
 teardown() {
@@ -221,7 +222,7 @@ EOF
 JSON
   run python3 "$SCRIPT" "$SETTINGS"
   [ "$status" -eq 0 ]
-  python3 -c "import json,sys; d=json.load(open('$SETTINGS')); assert d['statusLine']['type']=='command', d; assert d['statusLine']['command']=='/opt/back2base/statusline.sh', d; assert d['_back2base_schema']>=3, d"
+  python3 -c "import json,sys; d=json.load(open('$SETTINGS')); assert d['statusLine']['type']=='command', d; assert 'claude-hud' in d['statusLine']['command'], d; assert d['_back2base_schema']==5, d"
 }
 
 @test "migration 3 preserves existing statusLine" {
@@ -231,4 +232,24 @@ JSON
   run python3 "$SCRIPT" "$SETTINGS"
   [ "$status" -eq 0 ]
   python3 -c "import json; d=json.load(open('$SETTINGS')); assert d['statusLine']['command']=='/usr/local/bin/my-custom-line', d; assert d['_back2base_schema']>=3, d"
+}
+
+# ── Migration 5: repoint unmodified statusLine at claude-hud ──────────
+
+@test "migration 5 repoints an unmodified back2base statusLine at claude-hud" {
+  cat > "$SETTINGS" <<'JSON'
+{"statusLine": {"type": "command", "command": "/opt/back2base/statusline.sh", "padding": 0}}
+JSON
+  run python3 "$SCRIPT" "$SETTINGS"
+  [ "$status" -eq 0 ]
+  python3 -c "import json,sys; d=json.load(open('$SETTINGS')); assert d['_back2base_schema']==5, d; assert 'claude-hud' in d['statusLine']['command'], d; assert 'index.js' in d['statusLine']['command'], d"
+}
+
+@test "migration 5 leaves a customized statusLine alone" {
+  cat > "$SETTINGS" <<'JSON'
+{"_back2base_schema": 4, "statusLine": {"type": "command", "command": "/my/own.sh"}}
+JSON
+  run python3 "$SCRIPT" "$SETTINGS"
+  [ "$status" -eq 0 ]
+  python3 -c "import json; d=json.load(open('$SETTINGS')); assert d['statusLine']['command']=='/my/own.sh', d"
 }
