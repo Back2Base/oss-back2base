@@ -203,7 +203,7 @@ Only artifacts that actually exist on the host are mounted. Set `BACK2BASE_MANAG
 | `update` | Update the `oss-back2base` binary to the latest release. |
 | `version` | Print version information. |
 
-Useful root flags: `--profile <name>` (MCP profile), `--model` is set via `BACK2BASE_MODEL`, `-p/--prompt` (one-shot prompt, then exit), `-d/--dir <path>` (mount an extra directory at `/repos/<name>`, repeatable), `-r/--repo` (override the repo mount), `--overview` / `--no-overview` (pre-launch repo overview), `-y/--yes` (skip confirmations), `--no-update-check`. Run `oss-back2base <command> --help` for full details.
+Useful root flags: `--profile <name>` (MCP profile), `-p/--prompt` (one-shot prompt, then exit), `-d/--dir <path>` (mount an extra directory at `/repos/<name>`, repeatable), `-r/--repo` (override the repo mount), `--namespace <name>` (memory namespace), `--overview` / `--no-overview` (pre-launch repo overview), `-y/--yes` (skip confirmations), `--no-update-check`. The model is chosen by the profile or `BACK2BASE_MODEL` — there is no `--model` flag. Run `oss-back2base <command> --help` for full details.
 
 ## Development
 
