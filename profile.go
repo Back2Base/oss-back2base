@@ -58,19 +58,30 @@ func (c profilesConfig) resolvedServers(name string) ([]string, error) {
 	return servers, nil
 }
 
-// profileNames returns sorted profile names for display order.
-// "auto" is always first, "full" second, "minimal" always last, rest alphabetical.
+// profileNames returns profile names in display order: "auto" first, "full"
+// second, "minimal" last, the rest alphabetical in between. Sentinel names are
+// only included when they actually exist in the loaded config, so a config
+// missing one of them never produces a menu row with an empty description or a
+// numeric choice that resolves to a non-existent profile.
 func (c profilesConfig) profileNames() []string {
-	var names []string
+	var middle []string
 	for k := range c.Profiles {
 		if k != "auto" && k != "full" && k != "minimal" {
-			names = append(names, k)
+			middle = append(middle, k)
 		}
 	}
-	sort.Strings(names)
-	result := []string{"auto", "full"}
-	result = append(result, names...)
-	result = append(result, "minimal")
+	sort.Strings(middle)
+
+	var result []string
+	for _, lead := range []string{"auto", "full"} {
+		if _, ok := c.Profiles[lead]; ok {
+			result = append(result, lead)
+		}
+	}
+	result = append(result, middle...)
+	if _, ok := c.Profiles["minimal"]; ok {
+		result = append(result, "minimal")
+	}
 	return result
 }
 

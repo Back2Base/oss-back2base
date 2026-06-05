@@ -126,6 +126,7 @@ func TestProfileNames_Order(t *testing.T) {
 		Profiles: map[string]profileDef{
 			"minimal":  {},
 			"go":       {},
+			"auto":     {},
 			"full":     {},
 			"frontend": {},
 			"infra":    {},
@@ -134,18 +135,65 @@ func TestProfileNames_Order(t *testing.T) {
 
 	names := cfg.profileNames()
 
-	if names[0] != "full" {
-		t.Errorf("first = %q, want full", names[0])
+	if names[0] != "auto" {
+		t.Errorf("first = %q, want auto", names[0])
+	}
+	if names[1] != "full" {
+		t.Errorf("second = %q, want full", names[1])
 	}
 	if names[len(names)-1] != "minimal" {
 		t.Errorf("last = %q, want minimal", names[len(names)-1])
 	}
 
-	middle := names[1 : len(names)-1]
+	middle := names[2 : len(names)-1]
 	for i := 1; i < len(middle); i++ {
 		if middle[i] < middle[i-1] {
 			t.Errorf("middle not sorted: %v", middle)
 			break
+		}
+	}
+}
+
+func TestProfileNames_AutoFirst(t *testing.T) {
+	cfg := profilesConfig{
+		Profiles: map[string]profileDef{
+			"auto":    {},
+			"full":    {},
+			"go":      {},
+			"minimal": {},
+		},
+	}
+
+	names := cfg.profileNames()
+	if len(names) == 0 || names[0] != "auto" {
+		t.Errorf("profileNames()[0] = %q, want auto", names[0])
+	}
+}
+
+func TestProfileNames_OmitsMissingSentinels(t *testing.T) {
+	// A config without the auto/full/minimal sentinels must not list them —
+	// otherwise the menu shows empty-description rows and numeric selection can
+	// resolve to a profile that isn't in the config.
+	cfg := profilesConfig{
+		Profiles: map[string]profileDef{
+			"go":     {},
+			"python": {},
+		},
+	}
+
+	names := cfg.profileNames()
+	for _, n := range names {
+		if n == "auto" || n == "full" || n == "minimal" {
+			t.Errorf("profileNames() = %v, must not include sentinel %q absent from config", names, n)
+		}
+	}
+	want := []string{"go", "python"}
+	if len(names) != len(want) {
+		t.Fatalf("profileNames() = %v, want %v", names, want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Errorf("profileNames()[%d] = %q, want %q", i, names[i], want[i])
 		}
 	}
 }
