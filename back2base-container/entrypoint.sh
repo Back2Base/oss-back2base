@@ -162,73 +162,38 @@ _phase2_workspace_setup() {
 
   # Memory directories.
   #
-  # Two paths are involved and they MUST point at the same physical files:
-  #
-  #   1. The "canonical" store — either the BACK2BASE_DATA_DIR bind-mount at
-  #      ~/.back2base/memories (persistent, user-controlled), or the
-  #      MEMORY_NAMESPACE path under ~/.claude/projects/<ns>/memory (cleared
-  #      each session to prevent bleed).
-  #
-  #   2. Claude Code's auto-memory path, which it derives from the current
-  #      working directory by replacing every '/' with '-'
-  #      (e.g. /workspace → ~/.claude/projects/-workspace/memory). This is
-  #      where Claude Code reads MEMORY.md from at session start and writes
-  #      new memories to during the session.
-  #
-  # Without alignment, memories saved under (1) land outside what Claude
-  # Code reads (2) — they ship past each other and "memory doesn't load".
-  # We make (1) the canonical store and symlink (2) → (1). If a user
-  # already has real files at (2) from a previous version, migrate them into
-  # (1) once before replacing (2) with the symlink.
+  # Two paths MUST point at the same physical files:
+  #   (1) The canonical store — bind-mount or MEMORY_NAMESPACE path.
+  #   (2) Claude Code's auto-memory path (PWD with '/' → '-').
+  # We make (1) canonical and symlink (2) → (1); migrate any pre-existing
+  # real dir at (2) once before replacing it with the symlink.
 
-  # Branch 1: BACK2BASE_DATA_DIR mounted ~/.back2base/memories (bind mount active).
-  # Nothing other than the bind mount ever creates ~/.back2base, so its
-  # presence is an unambiguous signal. Use the mount as-is — do NOT wipe it;
-  # persistence is the explicit intent of the feature.
+  # Branch 1: BACK2BASE_DATA_DIR mounted ~/.back2base/memories (persistent;
+  # never wiped — persistence is the point). Branch 2: MEMORY_NAMESPACE-scoped
+  # path, cleared each session to prevent bleed. Either way we end with
+  # $ns_memory_dir as the canonical store, then align Claude Code's auto path
+  # to it once below.
+  ns_memory_dir=""
   if [ -d "$HOME/.back2base/memories" ]; then
     ns_memory_dir="$HOME/.back2base/memories"
-
-    # Also ensure the plans dir exists and export it for tools that want it.
     mkdir -p "$HOME/.back2base/plans"
     export BACK2BASE_PLANS_DIR="$HOME/.back2base/plans"
-
-    cwd_dir_name="${PWD//\//-}"
-    cc_memory_dir="$HOME/.claude/projects/${cwd_dir_name}/memory"
-    export CLAUDE_PROJECT_DIR="$HOME/.claude/projects/${cwd_dir_name}"
-
-    if [ "$cc_memory_dir" != "$ns_memory_dir" ]; then
-      mkdir -p "$(dirname "$cc_memory_dir")"
-      if [ -L "$cc_memory_dir" ]; then
-        if [ "$(readlink "$cc_memory_dir")" != "$ns_memory_dir" ]; then
-          ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-        fi
-      elif [ -d "$cc_memory_dir" ]; then
-        if [ -n "$(ls -A "$cc_memory_dir" 2>/dev/null)" ]; then
-          cp -an "$cc_memory_dir"/. "$ns_memory_dir"/ 2>/dev/null || true
-        fi
-        rm -rf "$cc_memory_dir"
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      else
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      fi
-    fi
-
-  # Branch 2: no bind mount — fall back to the MEMORY_NAMESPACE-scoped path
-  # (cleared each session to prevent bleed between sessions).
   elif [ -n "${MEMORY_NAMESPACE:-}" ]; then
     ns_memory_dir="$HOME/.claude/projects/${MEMORY_NAMESPACE}/memory"
     mkdir -p "$ns_memory_dir"
-
-    # Always start with a blank memory folder so old session memory does not
-    # silently bleed into a new session via Claude Code's MEMORY.md autoload.
+    # Start blank so old session memory doesn't bleed via MEMORY.md autoload.
     if [ -n "$(ls -A "$ns_memory_dir" 2>/dev/null)" ]; then
       rm -rf "${ns_memory_dir:?}"/* "${ns_memory_dir:?}"/.[!.]* 2>/dev/null || true
     fi
+  fi
 
+  # Align Claude Code's auto-memory path (PWD slug) → the canonical store, so
+  # it reads/writes the same physical files. Migrate any pre-existing real dir
+  # once, then replace with a symlink.
+  if [ -n "$ns_memory_dir" ]; then
     cwd_dir_name="${PWD//\//-}"
     cc_memory_dir="$HOME/.claude/projects/${cwd_dir_name}/memory"
     export CLAUDE_PROJECT_DIR="$HOME/.claude/projects/${cwd_dir_name}"
-
     if [ "$cc_memory_dir" != "$ns_memory_dir" ]; then
       mkdir -p "$(dirname "$cc_memory_dir")"
       if [ -L "$cc_memory_dir" ]; then
