@@ -23,6 +23,10 @@ COPY --chown=node:node skills/ /opt/back2base/defaults/skills/
 # Copy default slash commands. Seeded to ~/.claude/commands/ on first run.
 COPY --chown=node:node commands/ /opt/back2base/defaults/commands/
 
+# Copy default agents bundle (claudekit, MIT). Seeded to ~/.claude/agents/
+# on first run by seed_agents_if_missing.
+COPY --chown=node:node agents/ /opt/back2base/defaults/agents/
+
 # Copy CLAUDE.md template. Assembled into ~/.claude/CLAUDE.md at every
 # container start by generate_claude_md() in entrypoint.sh.
 COPY --chown=node:node defaults/CLAUDE.md.template /opt/back2base/defaults/CLAUDE.md.template

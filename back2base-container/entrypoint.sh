@@ -374,6 +374,19 @@ seed_skills_if_missing() {
   fi
 }
 
+# Agents live at ~/.claude/agents/ — seeded from image defaults the same way
+# skills are. Default ships the claudekit bundle (MIT). Offline-safe.
+seed_agents_if_missing() {
+  local defaults="${B2B_DEFAULTS_AGENTS:-/opt/back2base/defaults/agents}"
+  if [ ! -d "$HOME/.claude/agents" ] || [ -z "$(ls -A "$HOME/.claude/agents" 2>/dev/null)" ]; then
+    if [ -d "$defaults" ]; then
+      rm -rf "$HOME/.claude/agents"
+      cp -RL "$defaults" "$HOME/.claude/agents"
+      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/agents from image defaults"
+    fi
+  fi
+}
+
 # Commands live at ~/.claude/commands/ — seeded from image defaults on first
 # install, then user-owned.
 seed_commands_if_missing() {
@@ -408,6 +421,7 @@ seed_plugins_if_missing() {
 # don't race on directories that might be populated by the pulled images.
 _phase5_seed_image_defaults() {
   seed_skills_if_missing
+  seed_agents_if_missing
   seed_commands_if_missing
   seed_plugins_if_missing
 }
