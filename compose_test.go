@@ -338,3 +338,51 @@ func TestBuildRunArgs_AppendsManagedSettingsOverrideWhenPresent(t *testing.T) {
 		t.Fatalf("managed-settings override -f must follow base compose -f: %s", joined)
 	}
 }
+
+func TestWriteDataDirOverride(t *testing.T) {
+	state := t.TempDir()
+	data := t.TempDir()
+	cfg := cbConfig{StateDir: state, EnvFile: filepath.Join(state, "noenv")}
+
+	// Unset → no override, current behavior preserved.
+	t.Setenv("BACK2BASE_DATA_DIR", "")
+	if p := writeDataDirOverride(cfg); p != "" {
+		t.Fatalf("expected no override when unset, got %q", p)
+	}
+
+	// Set to an existing dir → override with both mounts; subdirs created.
+	t.Setenv("BACK2BASE_DATA_DIR", data)
+	p := writeDataDirOverride(cfg)
+	if p == "" {
+		t.Fatal("expected an override path, got empty")
+	}
+	body, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read override: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, filepath.Join(data, "memories")) ||
+		!strings.Contains(s, "/home/node/.claude/memories") {
+		t.Errorf("missing memories mount:\n%s", s)
+	}
+	if !strings.Contains(s, filepath.Join(data, "plans")) ||
+		!strings.Contains(s, "/home/node/.claude/plans") {
+		t.Errorf("missing plans mount:\n%s", s)
+	}
+	if _, err := os.Stat(filepath.Join(data, "plans")); err != nil {
+		t.Errorf("plans subdir not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(data, "memories")); err != nil {
+		t.Errorf("memories subdir not created: %v", err)
+	}
+	// OSS has no cloud sync — the override must NOT carry an environment block.
+	if strings.Contains(s, "environment:") {
+		t.Errorf("OSS override should not set environment:\n%s", s)
+	}
+
+	// Set to a non-existent path → no override (warning path).
+	t.Setenv("BACK2BASE_DATA_DIR", filepath.Join(data, "nope"))
+	if p := writeDataDirOverride(cfg); p != "" {
+		t.Errorf("expected no override for missing dir, got %q", p)
+	}
+}
