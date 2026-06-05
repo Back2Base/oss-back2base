@@ -65,21 +65,22 @@ make build
 ## Quickstart
 
 ```bash
-# 1. Authenticate. Either:
-claude setup-token                       # OAuth — uses your Claude subscription
-#  …or grab an API key from https://console.anthropic.com
-
-# 2. Run first-time setup. This extracts the container payload to
+# 1. Run first-time setup. This extracts the container payload to
 #    ~/.local/share/back2base, seeds ~/.config/back2base/env from the
 #    template, and builds the image (~500 MB base-image pull + a thin
 #    local layer).
 oss-back2base install
 
-# 3. Paste your credential into the env file.
-#    Set BACK2BASE_CLAUDE_CODE_OAUTH_TOKEN= (or BACK2BASE_ANTHROPIC_API_KEY=).
-$EDITOR ~/.config/back2base/env
+# 2. Authenticate. Easiest path — runs `claude setup-token` for you and
+#    saves the OAuth token into ~/.config/back2base/env:
+oss-back2base login
 
-# 4. Launch Claude Code in the current directory.
+#    …or set a credential by hand instead:
+#      BACK2BASE_CLAUDE_CODE_OAUTH_TOKEN=  (from `claude setup-token`)
+#      BACK2BASE_ANTHROPIC_API_KEY=        (from https://console.anthropic.com)
+#    $EDITOR ~/.config/back2base/env
+
+# 3. Launch Claude Code in the current directory.
 oss-back2base
 ```
 
@@ -190,6 +191,7 @@ Only artifacts that actually exist on the host are mounted. Set `BACK2BASE_MANAG
 |---|---|
 | `oss-back2base` *(no subcommand)* | Launch a Claude Code session in the current directory. |
 | `install` | First-time setup: check prereqs, seed the env file, build the image. |
+| `login` | Run `claude setup-token` in a throwaway container and save the OAuth token to `~/.config/back2base/env`. |
 | `build` | Build the container image. |
 | `rebuild` | Full rebuild with no cache. |
 | `shell` | Drop into a container shell instead of Claude. |
