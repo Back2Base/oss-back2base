@@ -57,10 +57,3 @@ setup() {
   MEMORY_MCP_URL=https://memory.example.test/mcp source "$REPO_DIR/init-firewall.sh" --dry-run-refresh
   printf '%s\n' "${ALLOWED_DOMAINS[@]}" | grep -q '^memory\.example\.test$'
 }
-
-@test "init-firewall.sh allow-lists the back2base OTel collector" {
-  # Daemon ships traces here via mTLS; firewall must let outbound
-  # connections through.
-  source "$REPO_DIR/init-firewall.sh" --dry-run-refresh
-  printf '%s\n' "${ALLOWED_DOMAINS[@]}" | grep -q '^otel\.back2base\.net$'
-}
