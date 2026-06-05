@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 // saveOAuthToken upserts the Claude OAuth token into the env file at
@@ -40,4 +44,55 @@ func saveOAuthToken(cfg cbConfig, token string, w io.Writer) error {
 
 	fmt.Fprintf(w, ":: OAuth token saved to %s\n", cfg.EnvFile)
 	return nil
+}
+
+var loginCmd = &cobra.Command{
+	Use:   "login",
+	Short: "Link your Claude subscription (runs claude setup-token, saves the OAuth token)",
+	Long: `Runs 'claude setup-token' inside a throwaway container and saves the
+resulting long-lived OAuth token to ~/.config/back2base/env as
+BACK2BASE_CLAUDE_CODE_OAUTH_TOKEN. This bills your Claude Pro/Max/Team
+subscription instead of an API key.
+
+OSS has no Auth0 / cloud step, so this is the only sign-in path.`,
+	Args: cobra.NoArgs,
+	RunE: runLogin,
+}
+
+func init() {
+	rootCmd.AddCommand(loginCmd)
+}
+
+// runLogin starts a throwaway container running `claude setup-token`, has the
+// user paste the resulting OAuth token, and saves it to the local env file.
+func runLogin(cmd *cobra.Command, args []string) error {
+	s, err := ensureReady()
+	if err != nil {
+		return err
+	}
+	if err := ensureBaseImage(resolveBaseImage()); err != nil {
+		return err
+	}
+
+	composeArgs := baseComposeArgs(s.cfg)
+	composeArgs = append(composeArgs, "run", "--rm",
+		"-e", "ANTHROPIC_BASE_URL=",
+		"claude", "claude", "setup-token")
+	if err := composeRun(composeArgs); err != nil {
+		return err
+	}
+
+	fmt.Println()
+	fmt.Print("Paste the token here: ")
+	reader := bufio.NewReader(os.Stdin)
+	token, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("read token: %w", err)
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("no token provided")
+	}
+
+	return saveOAuthToken(s.cfg, token, os.Stderr)
 }
