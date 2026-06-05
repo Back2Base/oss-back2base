@@ -26,8 +26,10 @@ setup() {
   export OVERVIEW_RENDERER_PATH="$RENDERER"
   export OVERVIEW_PROMPT_PATH="$PROMPT_FILE"
 
-  # Tighten timing for tests so the suite stays fast.
-  export OVERVIEW_TIMEOUT_SECS=3
+  # Generous timeout so heavy parallel load can't trip a spurious timeout in
+  # the completion tests (splice / skip-nonzero / skip-empty). The dedicated
+  # timeout test overrides this to a short value.
+  export OVERVIEW_TIMEOUT_SECS=60
   export OVERVIEW_HEARTBEAT_SECS=1
 }
 
@@ -104,6 +106,7 @@ exit 0'
 
 @test "timeout kills slow claude" {
   export BACK2BASE_OVERVIEW=1
+  export OVERVIEW_TIMEOUT_SECS=1   # short timeout; stub sleeps far longer
   stub_claude 'sleep 10; echo too-late'
 
   . "$HELPER"
