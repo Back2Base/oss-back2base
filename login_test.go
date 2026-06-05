@@ -90,7 +90,7 @@ func TestSaveOAuthTokenWarnsOnApiKey(t *testing.T) {
 }
 
 func TestSaveOAuthTokenNoWarnWithoutApiKey(t *testing.T) {
-	cfg := envCfg(t, "")
+	cfg := envCfg(t, "BACK2BASE_MODEL=opus\n")
 	var w bytes.Buffer
 	if err := saveOAuthToken(cfg, "tok", &w); err != nil {
 		t.Fatalf("saveOAuthToken: %v", err)

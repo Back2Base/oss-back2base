@@ -19,21 +19,17 @@ import (
 func saveOAuthToken(cfg cbConfig, token string, w io.Writer) error {
 	const key = "BACK2BASE_CLAUDE_CODE_OAUTH_TOKEN"
 
-	// Fresh install: write a file containing just this line (no leading blank).
 	if _, err := os.Stat(cfg.EnvFile); errors.Is(err, os.ErrNotExist) {
+		// Fresh install: create the file containing just this line.
 		if err := os.MkdirAll(filepath.Dir(cfg.EnvFile), 0755); err != nil {
 			return fmt.Errorf("create config dir: %w", err)
 		}
 		if err := os.WriteFile(cfg.EnvFile, []byte(key+"="+token+"\n"), 0644); err != nil {
 			return fmt.Errorf("create env file: %w", err)
 		}
-		fmt.Fprintf(w, ":: OAuth token saved to %s\n", cfg.EnvFile)
-		return nil
 	} else if err != nil {
 		return fmt.Errorf("stat env file: %w", err)
-	}
-
-	if err := setEnvValue(cfg.EnvFile, key, token); err != nil {
+	} else if err := setEnvValue(cfg.EnvFile, key, token); err != nil {
 		return fmt.Errorf("save OAuth token: %w", err)
 	}
 
