@@ -198,6 +198,14 @@ func writeDataDirOverride(cfg cbConfig) string {
 	if dir == "" {
 		return ""
 	}
+	// A newline in the path would break the generated override YAML (or let a
+	// crafted value inject extra keys), so reject it rather than emit corrupt
+	// YAML. Unix dir names can legally contain newlines, so the IsDir check
+	// below isn't enough on its own.
+	if strings.ContainsAny(dir, "\r\n") {
+		fmt.Fprintf(os.Stderr, ":: warn: BACK2BASE_DATA_DIR contains a newline — skipping plans/memories mount\n")
+		return ""
+	}
 	fi, err := os.Stat(dir)
 	if err != nil || !fi.IsDir() {
 		fmt.Fprintf(os.Stderr, ":: warn: BACK2BASE_DATA_DIR %q is not an existing directory — skipping plans/memories mount\n", dir)

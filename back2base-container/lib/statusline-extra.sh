@@ -9,8 +9,11 @@
 set +e
 
 label=""
-if [ -n "${MEMORY_NAMESPACE:-}" ]; then
-  label="ns:${MEMORY_NAMESPACE}"
+# Strip control chars (newlines etc.) from the namespace so a pathological
+# value can't emit invalid JSON or leak terminal-control sequences into the HUD.
+ns=$(printf '%s' "${MEMORY_NAMESPACE:-}" | tr -d '[:cntrl:]')
+if [ -n "$ns" ]; then
+  label="ns:${ns}"
 fi
 
 # claude-hud truncates past 50 chars anyway; cap here to keep this self-contained.

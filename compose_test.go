@@ -344,6 +344,13 @@ func TestWriteDataDirOverride(t *testing.T) {
 	data := t.TempDir()
 	cfg := cbConfig{StateDir: state, EnvFile: filepath.Join(state, "noenv")}
 
+	// writeDataDirOverride logs to stderr on both the success and skip paths;
+	// silence it so `go test` output stays clean.
+	origStderr := os.Stderr
+	devnull, _ := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	os.Stderr = devnull
+	defer func() { os.Stderr = origStderr; devnull.Close() }()
+
 	// Unset → no override, current behavior preserved.
 	t.Setenv("BACK2BASE_DATA_DIR", "")
 	if p := writeDataDirOverride(cfg); p != "" {
@@ -390,6 +397,15 @@ func TestWriteDataDirOverride(t *testing.T) {
 	t.Setenv("BACK2BASE_DATA_DIR", filepath.Join(data, "nope"))
 	if p := writeDataDirOverride(cfg); p != "" {
 		t.Errorf("expected no override for missing dir, got %q", p)
+	}
+
+	// Existing dir whose name contains a newline → rejected (a raw newline
+	// would corrupt the generated override YAML).
+	if nlDir := filepath.Join(data, "bad\nname"); os.MkdirAll(nlDir, 0o700) == nil {
+		t.Setenv("BACK2BASE_DATA_DIR", nlDir)
+		if p := writeDataDirOverride(cfg); p != "" {
+			t.Errorf("expected no override for newline path, got %q", p)
+		}
 	}
 }
 
