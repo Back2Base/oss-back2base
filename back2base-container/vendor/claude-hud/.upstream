@@ -1,0 +1,11 @@
+name: claude-hud
+version: 0.1.0
+repo: https://github.com/jarrodwatts/claude-hud
+license: MIT
+vendored: dist/ (precompiled ESM JS, runtime-only — .d.ts and .map files pruned)
+runtime: node >=18 (base image ships node:24); zero runtime dependencies
+invocation: node /opt/back2base/claude-hud/index.js  (statusLine command; reads
+  the Claude Code statusline JSON payload on stdin, writes the rendered HUD to
+  stdout). back2base feeds ns/auth/pwr via --extra-cmd statusline-extra.sh.
+notes: do not edit vendored files in place. To update, re-copy dist/ from the
+  upstream plugin/release at the pinned version and re-prune *.d.ts / *.map.

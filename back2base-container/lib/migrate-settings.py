@@ -22,6 +22,20 @@ import sys
 
 # ── Migrations ──────────────────────────────────────────────────────────────
 
+# The back2base statusLine command. claude-hud (vendored at
+# /opt/back2base/claude-hud) renders the HUD; statusline-extra.sh feeds the
+# back2base namespace segment via --extra-cmd. COLUMNS is exported because the
+# container TTY may not set it and claude-hud uses it for width.
+STATUSLINE_COMMAND = (
+    "bash -c 'export COLUMNS=\"${COLUMNS:-120}\"; "
+    "exec node /opt/back2base/claude-hud/index.js "
+    "--extra-cmd /opt/back2base/statusline-extra.sh'"
+)
+
+# The legacy hand-rolled renderer, replaced by claude-hud in schema 5. Used by
+# migrate_5 to detect an unmodified back2base statusLine worth upgrading.
+LEGACY_STATUSLINE_COMMAND = "/opt/back2base/statusline.sh"
+
 
 def migrate_1_envelope_hooks(d):
     """Wrap bare {type:"command",...} hook entries in {matcher,hooks} envelope.
@@ -98,7 +112,7 @@ def migrate_3_add_statusline(d):
         return False
     d["statusLine"] = {
         "type": "command",
-        "command": "/opt/back2base/statusline.sh",
+        "command": STATUSLINE_COMMAND,
         "padding": 0,
     }
     return True
@@ -117,6 +131,22 @@ def migrate_4_strip_hooks_block(d):
     return True
 
 
+def migrate_5_statusline_to_claude_hud(d):
+    """Repoint an unmodified back2base statusLine at vendored claude-hud.
+
+    Only rewrites a statusLine still pointing at the legacy renderer
+    (/opt/back2base/statusline.sh). A user who customized the command to
+    something else is left alone — same defensive posture as migrate_3.
+    """
+    sl = d.get("statusLine")
+    if not isinstance(sl, dict):
+        return False
+    if sl.get("command") != LEGACY_STATUSLINE_COMMAND:
+        return False
+    sl["command"] = STATUSLINE_COMMAND
+    return True
+
+
 # Registry: (number, callable). Numbers must be strictly increasing. Each
 # callable mutates the dict in place and returns True if it changed anything
 # (return value is informational; presence in the registry is what matters).
@@ -125,6 +155,7 @@ MIGRATIONS = [
     (2, migrate_2_prune_defunct_sessionstart),
     (3, migrate_3_add_statusline),
     (4, migrate_4_strip_hooks_block),
+    (5, migrate_5_statusline_to_claude_hud),
 ]
 CURRENT_SCHEMA = max(n for n, _ in MIGRATIONS)
 
@@ -137,6 +168,7 @@ MIGRATION_LOG = {
     2: ":: settings.json: pruned defunct SessionStart prefetch hook",
     3: ":: settings.json: seeded statusLine block",
     4: ":: settings.json: stripped hooks block (renderer now owns it)",
+    5: ":: settings.json: repointed statusLine at claude-hud",
 }
 
 
