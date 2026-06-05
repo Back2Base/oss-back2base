@@ -169,11 +169,9 @@ func dataDirOverridePath(cfg cbConfig) string {
 	return filepath.Join(cfg.StateDir, "run", "data-dir-override.yml")
 }
 
-// resolveDataDir returns the host directory the user wants bind-mounted for
-// persistent plans + memories, or "" when the feature is off. It prefers a
-// value set in the process environment, falling back to the BACK2BASE_DATA_DIR
-// key in the back2base env file, so the var works whether exported in the
-// shell or set in ~/.config/back2base/env. A leading "~/" is expanded to $HOME.
+// resolveDataDir returns the host dir for the plans + memories mount, or ""
+// when unset. Process env wins over the BACK2BASE_DATA_DIR key in the env file;
+// a leading "~/" is expanded to $HOME.
 func resolveDataDir(cfg cbConfig) string {
 	v := strings.TrimSpace(os.Getenv("BACK2BASE_DATA_DIR"))
 	if v == "" {
@@ -190,16 +188,11 @@ func resolveDataDir(cfg cbConfig) string {
 	return v
 }
 
-// writeDataDirOverride generates a docker-compose override that bind-mounts a
-// user-provided host directory for persistent plans and memories. When
-// BACK2BASE_DATA_DIR points at an existing directory, its plans/ and memories/
-// subdirectories (created if absent) are mounted read-write at
-// ~/.claude/plans and ~/.claude/memories inside the container.
-//
-// Returns the override path, or "" when the var is unset or points at a path
-// that does not exist (a warning is printed in that case). Mirrors
-// writeHostCredsOverride's best-effort, skip-on-missing posture. The OSS build
-// has no cloud memory sync, so the override is volumes-only.
+// writeDataDirOverride generates a compose override that bind-mounts
+// <BACK2BASE_DATA_DIR>/plans and /memories (created if absent) at
+// ~/.claude/plans and ~/.claude/memories. Returns "" when the var is unset or
+// the dir is missing (warned to stderr). OSS has no cloud sync, so it's
+// volumes-only.
 func writeDataDirOverride(cfg cbConfig) string {
 	dir := resolveDataDir(cfg)
 	if dir == "" {
