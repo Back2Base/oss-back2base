@@ -41,6 +41,11 @@
       "model": "claude-opus-4-8[1m]",
       "servers": ["brave-search", "context7", "fetch", "github", "sequential-thinking"]
     },
+    "general": {
+      "description": "General development baseline (unknown/unmatched workspace)",
+      "model": "claude-opus-4-8[1m]",
+      "servers": ["context7", "fetch", "github"]
+    },
     "minimal": {
       "description": "Bare minimum (filesystem, git only)",
       "servers": []

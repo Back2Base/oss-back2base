@@ -73,6 +73,11 @@ COPY --chown=node:node --chmod=0755 lib/render-claude-md.py /opt/back2base/rende
 # to decide whether to append a suggestion to pending.md based on edit heuristics.
 COPY --chown=node:node --chmod=0755 lib/claude-md-audit.py /opt/back2base/claude-md-audit.py
 
+# MCP profile auto-detector — run by entrypoint's filter_mcp_by_profile when
+# BACK2BASE_PROFILE is unset. Fingerprints /workspace, prints the resolved
+# MCP server set. Stdlib Python only.
+COPY --chown=node:node --chmod=0755 lib/detect-profile.py /opt/back2base/detect-profile.py
+
 # Pre-launch overview helpers. Sourced by entrypoint.sh between
 # generate_claude_md and the daemon launches when BACK2BASE_OVERVIEW=1.
 COPY --chown=node:node lib/prelaunch-overview.sh /opt/back2base/prelaunch-overview.sh
@@ -99,7 +104,7 @@ COPY --chown=node:node --chmod=0755 lib/power-steering.py /opt/back2base/power-s
 COPY --chown=node:node lib/power-steering-prompt.md /opt/back2base/power-steering-prompt.md
 
 # Belt + suspenders for legacy docker builders that silently ignore --chmod.
-RUN chmod +x /opt/back2base/hooks/_common.sh /opt/back2base/hooks/power-steering-drain.sh /opt/back2base/hooks/power-steering-tick.sh /opt/back2base/hooks/claude-md-audit-tally.sh /opt/back2base/hooks/claude-md-audit-trigger.sh /opt/back2base/session-snapshot.sh /opt/back2base/migrate-settings.py /opt/back2base/render-hooks.py /opt/back2base/firewall-refresh.sh /opt/back2base/path-sentinel.sh /opt/back2base/render-claude-md.py /opt/back2base/claude-md-audit.py /opt/back2base/prelaunch-overview.sh /opt/back2base/render-overview.py /opt/back2base/render-skill-preplan.py /opt/back2base/status.sh /opt/back2base/statusline-extra.sh /opt/back2base/power-steering.py 2>/dev/null || true
+RUN chmod +x /opt/back2base/hooks/_common.sh /opt/back2base/hooks/power-steering-drain.sh /opt/back2base/hooks/power-steering-tick.sh /opt/back2base/hooks/claude-md-audit-tally.sh /opt/back2base/hooks/claude-md-audit-trigger.sh /opt/back2base/session-snapshot.sh /opt/back2base/migrate-settings.py /opt/back2base/render-hooks.py /opt/back2base/firewall-refresh.sh /opt/back2base/path-sentinel.sh /opt/back2base/render-claude-md.py /opt/back2base/claude-md-audit.py /opt/back2base/detect-profile.py /opt/back2base/prelaunch-overview.sh /opt/back2base/render-overview.py /opt/back2base/render-skill-preplan.py /opt/back2base/status.sh /opt/back2base/statusline-extra.sh /opt/back2base/power-steering.py 2>/dev/null || true
 
 # Copy firewall and entrypoint scripts
 COPY init-firewall.sh entrypoint.sh /usr/local/bin/
