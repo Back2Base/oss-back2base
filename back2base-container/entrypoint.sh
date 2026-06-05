@@ -160,57 +160,10 @@ _phase2_workspace_setup() {
     export GIT_SSH_COMMAND="ssh -F $HOME/.ssh_local/config"
   fi
 
-  # Memory directories.
-  #
-  # Two paths MUST point at the same physical files:
-  #   (1) The canonical store — bind-mount or MEMORY_NAMESPACE path.
-  #   (2) Claude Code's auto-memory path (PWD with '/' → '-').
-  # We make (1) canonical and symlink (2) → (1); migrate any pre-existing
-  # real dir at (2) once before replacing it with the symlink.
-
-  # Branch 1: BACK2BASE_DATA_DIR mounted ~/.back2base/memories (persistent;
-  # never wiped — persistence is the point). Branch 2: MEMORY_NAMESPACE-scoped
-  # path, cleared each session to prevent bleed. Either way we end with
-  # $ns_memory_dir as the canonical store, then align Claude Code's auto path
-  # to it once below.
-  ns_memory_dir=""
-  if [ -d "$HOME/.back2base/memories" ]; then
-    ns_memory_dir="$HOME/.back2base/memories"
-    mkdir -p "$HOME/.back2base/plans"
-    export BACK2BASE_PLANS_DIR="$HOME/.back2base/plans"
-  elif [ -n "${MEMORY_NAMESPACE:-}" ]; then
-    ns_memory_dir="$HOME/.claude/projects/${MEMORY_NAMESPACE}/memory"
-    mkdir -p "$ns_memory_dir"
-    # Start blank so old session memory doesn't bleed via MEMORY.md autoload.
-    if [ -n "$(ls -A "$ns_memory_dir" 2>/dev/null)" ]; then
-      rm -rf "${ns_memory_dir:?}"/* "${ns_memory_dir:?}"/.[!.]* 2>/dev/null || true
-    fi
-  fi
-
-  # Align Claude Code's auto-memory path (PWD slug) → the canonical store, so
-  # it reads/writes the same physical files. Migrate any pre-existing real dir
-  # once, then replace with a symlink.
-  if [ -n "$ns_memory_dir" ]; then
-    cwd_dir_name="${PWD//\//-}"
-    cc_memory_dir="$HOME/.claude/projects/${cwd_dir_name}/memory"
-    export CLAUDE_PROJECT_DIR="$HOME/.claude/projects/${cwd_dir_name}"
-    if [ "$cc_memory_dir" != "$ns_memory_dir" ]; then
-      mkdir -p "$(dirname "$cc_memory_dir")"
-      if [ -L "$cc_memory_dir" ]; then
-        if [ "$(readlink "$cc_memory_dir")" != "$ns_memory_dir" ]; then
-          ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-        fi
-      elif [ -d "$cc_memory_dir" ]; then
-        if [ -n "$(ls -A "$cc_memory_dir" 2>/dev/null)" ]; then
-          cp -an "$cc_memory_dir"/. "$ns_memory_dir"/ 2>/dev/null || true
-        fi
-        rm -rf "$cc_memory_dir"
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      else
-        ln -sfn "$ns_memory_dir" "$cc_memory_dir"
-      fi
-    fi
-  fi
+  # Memory-path alignment — see lib/memory-align.sh. Sourced so the logic is
+  # unit-testable (test/memory-align.bats); entrypoint just invokes it here.
+  . /opt/back2base/memory-align.sh
+  b2b_align_memory_dir
 
   # Path-naming sentinel. Background daemon: 30s after launch, verifies that
   # Claude Code wrote its session JSONL under the directory name we predicted

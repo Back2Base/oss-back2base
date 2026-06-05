@@ -60,6 +60,10 @@ COPY --chown=node:node --chmod=0755 lib/firewall-refresh.sh /opt/back2base/firew
 # symlink lands in the wrong place; this catches it loudly.
 COPY --chown=node:node --chmod=0755 lib/path-sentinel.sh /opt/back2base/path-sentinel.sh
 
+# Memory-path alignment lib — sourced by entrypoint.sh and unit-tested by
+# test/memory-align.bats. Defines b2b_align_memory_dir.
+COPY --chown=node:node lib/memory-align.sh /opt/back2base/memory-align.sh
+
 # CLAUDE.md renderer (stdlib Python). Replaces the bash+jq generate_claude_md
 # function in entrypoint.sh. Reassembles ~/.claude/CLAUDE.md from the template
 # and the live mcp.json/commands dir on every container start.
