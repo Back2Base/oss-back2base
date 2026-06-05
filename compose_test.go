@@ -375,6 +375,9 @@ func TestWriteDataDirOverride(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(data, "memories")); err != nil {
 		t.Errorf("memories subdir not created: %v", err)
 	}
+	if strings.Contains(s, ":ro") {
+		t.Errorf("data-dir override must be read-write (got :ro):\n%s", s)
+	}
 	// OSS has no cloud sync — the override must NOT carry an environment block.
 	if strings.Contains(s, "environment:") {
 		t.Errorf("OSS override should not set environment:\n%s", s)
@@ -384,5 +387,18 @@ func TestWriteDataDirOverride(t *testing.T) {
 	t.Setenv("BACK2BASE_DATA_DIR", filepath.Join(data, "nope"))
 	if p := writeDataDirOverride(cfg); p != "" {
 		t.Errorf("expected no override for missing dir, got %q", p)
+	}
+}
+
+func TestResolveDataDirEnvFileFallback(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, "env")
+	if err := os.WriteFile(envFile, []byte("BACK2BASE_DATA_DIR="+dir+"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	cfg := cbConfig{StateDir: dir, EnvFile: envFile}
+	t.Setenv("BACK2BASE_DATA_DIR", "") // process env empty → must fall back to the file
+	if got := resolveDataDir(cfg); got != dir {
+		t.Errorf("resolveDataDir: want %q from env file, got %q", dir, got)
 	}
 }
