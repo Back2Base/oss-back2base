@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 var (
@@ -26,7 +26,7 @@ configurable MCP server registry, an outbound network firewall, and
 persistent state. Configs and profiles live in ~/.config/back2base/.
 
 Update: oss-back2base update`,
-	Args:  cobra.ArbitraryArgs,
+	Args:          cobra.ArbitraryArgs,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
@@ -37,11 +37,10 @@ func init() {
 	rootCmd.Flags().StringVarP(&flagRepo, "repo", "r", "", "Override the default repo mount")
 	rootCmd.PersistentFlags().BoolVarP(&flagYes, "yes", "y", false, "Skip confirmation prompts")
 	rootCmd.PersistentFlags().BoolVar(&flagNoUpdateCheck, "no-update-check", false, "Skip the once-daily new-release check")
-	rootCmd.Flags().StringVar(&flagProfile, "profile", "", "MCP server profile (full, go, frontend, infra, research, minimal)")
+	rootCmd.Flags().StringVar(&flagProfile, "profile", "", "MCP server profile (auto, full, go, frontend, infra, research, minimal)")
 	rootCmd.Flags().BoolVar(&flagOverview, "overview", false, "Run a pre-launch repo overview before Claude starts")
 	rootCmd.Flags().BoolVar(&flagNoOverview, "no-overview", false, "Skip the pre-launch repo overview (overrides remembered preference)")
 	rootCmd.Flags().StringVar(&flagNamespace, "namespace", "", "Memory namespace (overrides auto-derivation from git remote or .back2base/namespace)")
-
 
 	// Prepend the workspace-aware banner to the default help output so
 	// the box contents always reflect the cwd, not a compile-time const.

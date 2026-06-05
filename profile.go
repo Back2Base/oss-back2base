@@ -59,16 +59,16 @@ func (c profilesConfig) resolvedServers(name string) ([]string, error) {
 }
 
 // profileNames returns sorted profile names for display order.
-// "full" is always first, "minimal" always last, rest alphabetical.
+// "auto" is always first, "full" second, "minimal" always last, rest alphabetical.
 func (c profilesConfig) profileNames() []string {
 	var names []string
 	for k := range c.Profiles {
-		if k != "full" && k != "minimal" {
+		if k != "auto" && k != "full" && k != "minimal" {
 			names = append(names, k)
 		}
 	}
 	sort.Strings(names)
-	result := []string{"full"}
+	result := []string{"auto", "full"}
 	result = append(result, names...)
 	result = append(result, "minimal")
 	return result
@@ -82,12 +82,12 @@ func selectProfile(cfg profilesConfig) (string, error) {
 
 // selectProfileWithDefault is selectProfile with a caller-supplied
 // "remembered" profile. An empty or unknown defaultName falls back to
-// "full" (the original behavior). The default is the value used on EOF
+// "auto" (the new default). The default is the value used on EOF
 // or empty-line input.
 func selectProfileWithDefault(cfg profilesConfig, defaultName string) (string, error) {
 	names := cfg.profileNames()
 
-	chosenDefault := "full"
+	chosenDefault := "auto"
 	if defaultName != "" {
 		if _, ok := cfg.Profiles[defaultName]; ok {
 			chosenDefault = defaultName
@@ -99,12 +99,16 @@ func selectProfileWithDefault(cfg profilesConfig, defaultName string) (string, e
 	fmt.Fprintln(os.Stderr)
 	for i, name := range names {
 		p := cfg.Profiles[name]
-		servers, _ := cfg.resolvedServers(name)
 		marker := " "
 		if name == chosenDefault {
 			marker = "*"
 		}
-		fmt.Fprintf(os.Stderr, " %s %d) %-12s %s (%d servers)\n", marker, i+1, name, p.Description, len(servers))
+		if name == "auto" {
+			fmt.Fprintf(os.Stderr, " %s %d) %-12s %s\n", marker, i+1, name, p.Description)
+		} else {
+			servers, _ := cfg.resolvedServers(name)
+			fmt.Fprintf(os.Stderr, " %s %d) %-12s %s (%d servers)\n", marker, i+1, name, p.Description, len(servers))
+		}
 	}
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "Profile [1-%s, name, or Enter for %s]: ", strconv.Itoa(len(names)), chosenDefault)

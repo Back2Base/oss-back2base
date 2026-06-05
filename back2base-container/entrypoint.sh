@@ -244,17 +244,18 @@ _phase2_5_seed_settings() {
 _phase "Seeding settings + MCP defaults" _phase2_5_seed_settings
 
 # ── MCP profile filtering ───────────────────────────────────────────────────
-# When BACK2BASE_PROFILE is set (and not "full"), filter .mcp.json to only
-# include servers in that profile. Core servers (filesystem, git) are always
-# included. When BACK2BASE_PROFILE is unset, auto-detects the profile from
-# the workspace fingerprint via detect-profile.py (defaults to general set).
+# When BACK2BASE_PROFILE is set to a named profile (not "auto" or unset),
+# filter .mcp.json to only include servers in that profile. Core servers
+# (filesystem, git) are always included. When BACK2BASE_PROFILE is
+# unset OR set to "auto" (the default), auto-detects the profile from the
+# workspace fingerprint via detect-profile.py.
 # The profiles definition lives at /opt/back2base/defaults/profiles.json.
 filter_mcp_by_profile() {
   local mcp_file="$HOME/.claude/.mcp.json"
   local profiles_file="/opt/back2base/defaults/profiles.json"
   local profile allowed
 
-  if [ -n "${BACK2BASE_PROFILE:-}" ]; then
+  if [ -n "${BACK2BASE_PROFILE:-}" ] && [ "${BACK2BASE_PROFILE}" != "auto" ]; then
     # ── Explicit profile (unchanged behavior) ──
     profile="$BACK2BASE_PROFILE"
     if [ "$profile" = "full" ]; then
@@ -440,7 +441,10 @@ generate_claude_md() {
   local out="$HOME/.claude/CLAUDE.md"
   local mcp="$HOME/.claude/.mcp.json"
   local commands_dir="$HOME/.claude/commands"
-  local profile_snippet="/opt/back2base/defaults/profile-snippets/${BACK2BASE_PROFILE:-general}.md"
+  # auto (the default) has no snippet of its own — show the general guide.
+  local snippet_profile="${BACK2BASE_PROFILE:-general}"
+  [ "$snippet_profile" = "auto" ] && snippet_profile="general"
+  local profile_snippet="/opt/back2base/defaults/profile-snippets/${snippet_profile}.md"
   python3 /opt/back2base/render-claude-md.py \
     --template "$template" \
     --mcp "$mcp" \
