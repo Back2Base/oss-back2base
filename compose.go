@@ -145,7 +145,7 @@ func writeManagedSettingsOverride(cfg cbConfig) string {
 		if _, err := os.Stat(m.src); err != nil {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("      - %q:%q:ro", m.src, m.dst))
+		lines = append(lines, fmt.Sprintf("      - %q", m.src+":"+m.dst+":ro"))
 	}
 	if len(lines) == 0 {
 		return ""

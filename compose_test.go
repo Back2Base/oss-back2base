@@ -393,6 +393,45 @@ func TestWriteDataDirOverride(t *testing.T) {
 	}
 }
 
+// TestManagedSettingsOverrideYAMLValid: the generated YAML must NOT contain the
+// per-half-quoted form ("src":"dst":ro) which breaks docker compose config, and
+// the host path — including any spaces — must survive intact in the override.
+func TestManagedSettingsOverrideYAMLValid(t *testing.T) {
+	// Create a host dir with a space in its path (mirrors macOS production path).
+	base := t.TempDir()
+	hostDir := filepath.Join(base, "App Support")
+	if err := os.MkdirAll(hostDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hostDir, "managed-settings.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BACK2BASE_MANAGED_SETTINGS_DIR", hostDir)
+
+	cfg := cbConfig{StateDir: t.TempDir()}
+	path := writeManagedSettingsOverride(cfg)
+	if path == "" {
+		t.Fatal("expected override path, got empty")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read override: %v", err)
+	}
+	body := string(data)
+
+	// The broken per-half-quoted pattern is a quote immediately followed by a
+	// colon immediately followed by another quote: ":"
+	if strings.Contains(body, `":"`) {
+		t.Errorf("override contains per-half-quoted volume pattern (bug: %%q:%%q:ro form):\n%s", body)
+	}
+
+	// The space-containing source path must appear verbatim in the YAML body.
+	src := filepath.Join(hostDir, "managed-settings.json")
+	if !strings.Contains(body, src) {
+		t.Errorf("override does not contain source path %q:\n%s", src, body)
+	}
+}
+
 func TestResolveDataDirEnvFileFallback(t *testing.T) {
 	dir := t.TempDir()
 	envFile := filepath.Join(dir, "env")
