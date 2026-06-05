@@ -219,8 +219,8 @@ func writeDataDirOverride(cfg cbConfig) string {
 		}
 	}
 	body := "services:\n  claude:\n    volumes:\n" +
-		fmt.Sprintf("      - %q:%q\n", memHost, "/home/node/.claude/memories") +
-		fmt.Sprintf("      - %q:%q\n", plansHost, "/home/node/.claude/plans")
+		fmt.Sprintf("      - %s:%s\n", memHost, "/home/node/.claude/memories") +
+		fmt.Sprintf("      - %s:%s\n", plansHost, "/home/node/.claude/plans")
 	path := dataDirOverridePath(cfg)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		fmt.Fprintf(os.Stderr, ":: warn: could not stage data-dir override dir (%v)\n", err)

@@ -378,6 +378,9 @@ func TestWriteDataDirOverride(t *testing.T) {
 	if strings.Contains(s, ":ro") {
 		t.Errorf("data-dir override must be read-write (got :ro):\n%s", s)
 	}
+	if strings.Contains(s, "\"") {
+		t.Errorf("override YAML must not contain double-quoted paths (breaks compose parsing):\n%s", s)
+	}
 	// OSS has no cloud sync — the override must NOT carry an environment block.
 	if strings.Contains(s, "environment:") {
 		t.Errorf("OSS override should not set environment:\n%s", s)
