@@ -58,19 +58,30 @@ func (c profilesConfig) resolvedServers(name string) ([]string, error) {
 	return servers, nil
 }
 
-// profileNames returns sorted profile names for display order.
-// "full" is always first, "minimal" always last, rest alphabetical.
+// profileNames returns profile names in display order: "auto" first, "full"
+// second, "minimal" last, the rest alphabetical in between. Sentinel names are
+// only included when they actually exist in the loaded config, so a config
+// missing one of them never produces a menu row with an empty description or a
+// numeric choice that resolves to a non-existent profile.
 func (c profilesConfig) profileNames() []string {
-	var names []string
+	var middle []string
 	for k := range c.Profiles {
-		if k != "full" && k != "minimal" {
-			names = append(names, k)
+		if k != "auto" && k != "full" && k != "minimal" {
+			middle = append(middle, k)
 		}
 	}
-	sort.Strings(names)
-	result := []string{"full"}
-	result = append(result, names...)
-	result = append(result, "minimal")
+	sort.Strings(middle)
+
+	var result []string
+	for _, lead := range []string{"auto", "full"} {
+		if _, ok := c.Profiles[lead]; ok {
+			result = append(result, lead)
+		}
+	}
+	result = append(result, middle...)
+	if _, ok := c.Profiles["minimal"]; ok {
+		result = append(result, "minimal")
+	}
 	return result
 }
 
@@ -82,12 +93,12 @@ func selectProfile(cfg profilesConfig) (string, error) {
 
 // selectProfileWithDefault is selectProfile with a caller-supplied
 // "remembered" profile. An empty or unknown defaultName falls back to
-// "full" (the original behavior). The default is the value used on EOF
+// "auto" (the new default). The default is the value used on EOF
 // or empty-line input.
 func selectProfileWithDefault(cfg profilesConfig, defaultName string) (string, error) {
 	names := cfg.profileNames()
 
-	chosenDefault := "full"
+	chosenDefault := "auto"
 	if defaultName != "" {
 		if _, ok := cfg.Profiles[defaultName]; ok {
 			chosenDefault = defaultName
@@ -99,12 +110,16 @@ func selectProfileWithDefault(cfg profilesConfig, defaultName string) (string, e
 	fmt.Fprintln(os.Stderr)
 	for i, name := range names {
 		p := cfg.Profiles[name]
-		servers, _ := cfg.resolvedServers(name)
 		marker := " "
 		if name == chosenDefault {
 			marker = "*"
 		}
-		fmt.Fprintf(os.Stderr, " %s %d) %-12s %s (%d servers)\n", marker, i+1, name, p.Description, len(servers))
+		if name == "auto" {
+			fmt.Fprintf(os.Stderr, " %s %d) %-12s %s\n", marker, i+1, name, p.Description)
+		} else {
+			servers, _ := cfg.resolvedServers(name)
+			fmt.Fprintf(os.Stderr, " %s %d) %-12s %s (%d servers)\n", marker, i+1, name, p.Description, len(servers))
+		}
 	}
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "Profile [1-%s, name, or Enter for %s]: ", strconv.Itoa(len(names)), chosenDefault)

@@ -319,10 +319,11 @@ func TestSelectProfileWithDefault_EmptyInputUsesDefault(t *testing.T) {
 	}
 }
 
-func TestSelectProfileWithDefault_UnknownDefaultFallsBackToFull(t *testing.T) {
+func TestSelectProfileWithDefault_UnknownDefaultFallsBackToAuto(t *testing.T) {
 	cfg := profilesConfig{
 		Core: []string{"a"},
 		Profiles: map[string]profileDef{
+			"auto":    {Description: "auto-detect", Servers: []string{}},
 			"full":    {Description: "all", Servers: []string{}},
 			"minimal": {Description: "min", Servers: []string{}},
 		},
@@ -339,7 +340,7 @@ func TestSelectProfileWithDefault_UnknownDefaultFallsBackToFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("select: %v", err)
 	}
-	if got != "full" {
-		t.Errorf("unknown default → %q, want full", got)
+	if got != "auto" {
+		t.Errorf("unknown default → %q, want auto", got)
 	}
 }

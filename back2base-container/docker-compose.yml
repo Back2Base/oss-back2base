@@ -93,7 +93,7 @@ services:
       - BACK2BASE_MODEL=${BACK2BASE_MODEL:-}
 
       # MCP server profile — controls which servers are enabled
-      - BACK2BASE_PROFILE=${BACK2BASE_PROFILE:-full}
+      - BACK2BASE_PROFILE=${BACK2BASE_PROFILE:-auto}
       - BACK2BASE_OVERVIEW=${BACK2BASE_OVERVIEW:-0}
 
       # Host mount-source path for /workspace. Used by entrypoint.sh as the

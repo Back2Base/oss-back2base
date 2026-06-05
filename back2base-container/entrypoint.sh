@@ -244,40 +244,55 @@ _phase2_5_seed_settings() {
 _phase "Seeding settings + MCP defaults" _phase2_5_seed_settings
 
 # ── MCP profile filtering ───────────────────────────────────────────────────
-# When BACK2BASE_PROFILE is set (and not "full"), filter .mcp.json to only
-# include servers in that profile. Core servers (filesystem, git, memory) are
-# always included. The profiles definition lives at /opt/back2base/defaults/profiles.json.
+# When BACK2BASE_PROFILE is set to a named profile (not "auto" or unset),
+# filter .mcp.json to only include servers in that profile. Core servers
+# (filesystem, git) are always included. When BACK2BASE_PROFILE is
+# unset OR set to "auto" (the default), auto-detects the profile from the
+# workspace fingerprint via detect-profile.py.
+# The profiles definition lives at /opt/back2base/defaults/profiles.json.
 filter_mcp_by_profile() {
-  local profile="${BACK2BASE_PROFILE:-full}"
   local mcp_file="$HOME/.claude/.mcp.json"
   local profiles_file="/opt/back2base/defaults/profiles.json"
+  local profile allowed
 
-  if [ "$profile" = "full" ]; then
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP profile: full (all servers)"
-    return 0
+  if [ -n "${BACK2BASE_PROFILE:-}" ] && [ "${BACK2BASE_PROFILE}" != "auto" ]; then
+    # ── Explicit profile (unchanged behavior) ──
+    profile="$BACK2BASE_PROFILE"
+    if [ "$profile" = "full" ]; then
+      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP profile: full (all servers)"
+      return 0
+    fi
+    if [ ! -f "$profiles_file" ] || [ ! -f "$mcp_file" ] || ! command -v jq &>/dev/null; then
+      echo ":: ⚠ Cannot filter MCP servers (missing profiles.json, .mcp.json, or jq)"
+      return 0
+    fi
+    if ! jq -e --arg p "$profile" '.profiles[$p]' "$profiles_file" >/dev/null 2>&1; then
+      echo ":: ⚠ Unknown profile '$profile', using full server set"
+      return 0
+    fi
+    allowed=$(jq -r --arg p "$profile" '(.core + .profiles[$p].servers) | unique | .[]' "$profiles_file")
+  else
+    # ── Auto-detect from the workspace fingerprint (new default) ──
+    profile="auto"
+    if [ ! -f "$profiles_file" ] || [ ! -f "$mcp_file" ] || ! command -v jq &>/dev/null; then
+      echo ":: ⚠ Cannot filter MCP servers (missing profiles.json, .mcp.json, or jq)"
+      return 0
+    fi
+    allowed=$(python3 /opt/back2base/detect-profile.py \
+      --workspace "$PWD" --profiles "$profiles_file" 2>/dev/null)
+    if [ -z "$allowed" ]; then
+      echo ":: ⚠ auto-detect produced no servers, keeping full server set"
+      return 0
+    fi
   fi
 
-  if [ ! -f "$profiles_file" ] || [ ! -f "$mcp_file" ] || ! command -v jq &>/dev/null; then
-    echo ":: ⚠ Cannot filter MCP servers (missing profiles.json, .mcp.json, or jq)"
-    return 0
-  fi
-
-  # Validate profile exists
-  if ! jq -e --arg p "$profile" '.profiles[$p]' "$profiles_file" >/dev/null 2>&1; then
-    echo ":: ⚠ Unknown profile '$profile', using full server set"
-    return 0
-  fi
-
-  # Build the allowed server list: core + profile servers
-  local allowed
-  allowed=$(jq -r --arg p "$profile" '
-    (.core + .profiles[$p].servers) | unique | .[]
-  ' "$profiles_file")
-
-  # Filter .mcp.json to only include allowed servers, sorted by key
+  # ── Shared filter: keep only allowed servers, sorted by key ──
   local tmp
-  tmp=$(mktemp "$mcp_file.XXXXXX")
-  if jq --argjson allowed "$(echo "$allowed" | jq -R -s 'split("\n") | map(select(. != ""))')" \
+  if ! tmp=$(mktemp "$mcp_file.XXXXXX" 2>/dev/null); then
+    echo ":: ⚠ MCP filtering failed (mktemp), keeping full server set"
+    return 0
+  fi
+  if jq --argjson allowed "$(printf '%s\n' "$allowed" | jq -R -s 'split("\n") | map(select(. != ""))')" \
     '{ mcpServers: (.mcpServers | to_entries | map(select(.key as $k | $allowed | index($k))) | sort_by(.key) | from_entries) }' \
     "$mcp_file" > "$tmp" 2>/dev/null; then
     mv -f "$tmp" "$mcp_file"
@@ -360,6 +375,19 @@ seed_skills_if_missing() {
   fi
 }
 
+# Agents live at ~/.claude/agents/ — seeded from image defaults the same way
+# skills are. Default ships the claudekit bundle (MIT). Offline-safe.
+seed_agents_if_missing() {
+  local defaults="${B2B_DEFAULTS_AGENTS:-/opt/back2base/defaults/agents}"
+  if [ ! -d "$HOME/.claude/agents" ] || [ -z "$(ls -A "$HOME/.claude/agents" 2>/dev/null)" ]; then
+    if [ -d "$defaults" ]; then
+      rm -rf "$HOME/.claude/agents"
+      cp -RL "$defaults" "$HOME/.claude/agents"
+      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/agents from image defaults"
+    fi
+  fi
+}
+
 # Commands live at ~/.claude/commands/ — seeded from image defaults on first
 # install, then user-owned.
 seed_commands_if_missing() {
@@ -394,6 +422,7 @@ seed_plugins_if_missing() {
 # don't race on directories that might be populated by the pulled images.
 _phase5_seed_image_defaults() {
   seed_skills_if_missing
+  seed_agents_if_missing
   seed_commands_if_missing
   seed_plugins_if_missing
 }
@@ -412,7 +441,10 @@ generate_claude_md() {
   local out="$HOME/.claude/CLAUDE.md"
   local mcp="$HOME/.claude/.mcp.json"
   local commands_dir="$HOME/.claude/commands"
-  local profile_snippet="/opt/back2base/defaults/profile-snippets/${BACK2BASE_PROFILE:-full}.md"
+  # auto (the default) has no snippet of its own — show the general guide.
+  local snippet_profile="${BACK2BASE_PROFILE:-general}"
+  [ "$snippet_profile" = "auto" ] && snippet_profile="general"
+  local profile_snippet="/opt/back2base/defaults/profile-snippets/${snippet_profile}.md"
   python3 /opt/back2base/render-claude-md.py \
     --template "$template" \
     --mcp "$mcp" \
@@ -439,7 +471,7 @@ run_skill_preplan() {
     || echo ":: ⚠ skill-preplan exited non-zero; CLAUDE.md unchanged" >&2
 }
 
-if [ "${BACK2BASE_SKILL_PREPLAN:-1}" != "0" ] && [ "${BACK2BASE_PROFILE:-full}" != "minimal" ]; then
+if [ "${BACK2BASE_SKILL_PREPLAN:-1}" != "0" ] && [ "${BACK2BASE_PROFILE:-auto}" != "minimal" ]; then
   _phase "Fingerprinting workspace" run_skill_preplan
 fi
 

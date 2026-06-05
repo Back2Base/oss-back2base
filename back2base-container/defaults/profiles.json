@@ -1,6 +1,11 @@
 {
   "core": ["filesystem", "git"],
   "profiles": {
+    "auto": {
+      "description": "Auto-detect MCP servers from the workspace (recommended)",
+      "model": "claude-opus-4-8[1m]",
+      "servers": []
+    },
     "full": {
       "description": "All MCP servers (max capability, highest token cost)",
       "model": "claude-opus-4-8[1m]",
@@ -40,6 +45,11 @@
       "description": "Technical writing and documentation authoring",
       "model": "claude-opus-4-8[1m]",
       "servers": ["brave-search", "context7", "fetch", "github", "sequential-thinking"]
+    },
+    "general": {
+      "description": "General development baseline (unknown/unmatched workspace)",
+      "model": "claude-opus-4-8[1m]",
+      "servers": ["context7", "fetch", "github"]
     },
     "minimal": {
       "description": "Bare minimum (filesystem, git only)",

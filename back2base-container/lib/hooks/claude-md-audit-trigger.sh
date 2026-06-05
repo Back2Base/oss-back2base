@@ -10,6 +10,14 @@ set -u
 b2b_hook_init "claude-md-audit-trigger"
 b2b_hook_disabled "BACK2BASE_HOOK_CLAUDE_MD_AUDIT" && b2b_hook_passthrough
 
+# Cheap idle-turn gate: claude-md-audit.py reads edits.jsonl from
+# POWER_STEERING_DIR and needs accumulated edits before decide() can suggest
+# anything. With no edits tallied since the last drain, decide() is guaranteed
+# to return nothing — so skip the python3 spawn entirely. Keeps this
+# UserPromptSubmit hook ~zero-cost on turns with no edits.
+EDITS="${POWER_STEERING_DIR:-/run/back2base/power-steering}/edits.jsonl"
+[ -s "$EDITS" ] || b2b_hook_passthrough
+
 AUDIT="${CLAUDE_MD_AUDIT_PY:-/opt/back2base/claude-md-audit.py}"
 PENDING="${POWER_STEERING_PENDING:-/run/back2base/power-steering/pending.md}"
 

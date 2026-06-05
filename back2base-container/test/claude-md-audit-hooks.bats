@@ -75,6 +75,31 @@ teardown() { rm -rf "$TEST_TMP"; }
   [ ! -s "$POWER_STEERING_PENDING" ]
 }
 
+@test "trigger hook: skips python spawn when edits.jsonl is absent" {
+  # edits.jsonl does NOT exist in POWER_STEERING_DIR
+  SENTINEL="$TEST_TMP/audit-was-run"
+  fake_audit="$TEST_TMP/fake-audit.py"
+  printf '#!/usr/bin/env python3\nopen("%s","w").write("ran")\n' "$SENTINEL" > "$fake_audit"
+  chmod +x "$fake_audit"
+  run env CLAUDE_MD_AUDIT_PY="$fake_audit" bash "$TRIGGER_HOOK" <<<'{}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "{}" ]
+  [ ! -f "$SENTINEL" ]
+}
+
+@test "trigger hook: does invoke python when edits.jsonl is non-empty" {
+  SENTINEL="$TEST_TMP/audit-was-run"
+  fake_audit="$TEST_TMP/fake-audit.py"
+  printf '#!/usr/bin/env python3\nopen("%s","w").write("ran")\n' "$SENTINEL" > "$fake_audit"
+  chmod +x "$fake_audit"
+  # Populate edits.jsonl so the gate passes
+  printf '{"ts":1,"tool":"Edit","file":"/repo/x.go"}\n' > "$POWER_STEERING_DIR/edits.jsonl"
+  run env CLAUDE_MD_AUDIT_PY="$fake_audit" bash "$TRIGGER_HOOK" <<<'{}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "{}" ]
+  [ -f "$SENTINEL" ]
+}
+
 @test "manifest: claude-md-audit-tally registered as PostToolUse" {
   MANIFEST="$BATS_TEST_DIRNAME/../defaults/hooks.json"
   run jq -r '.hooks[] | select(.name=="claude-md-audit-tally") | .event' "$MANIFEST"

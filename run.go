@@ -81,7 +81,7 @@ func runClaude(cmd *cobra.Command, args []string) error {
 
 	// Resolve profile: flag > env > interactive selector (skip for one-shot prompts).
 	// `--profile=last` (or BACK2BASE_PROFILE=last) resolves to the remembered
-	// value for this namespace, falling back to "full" if nothing was saved.
+	// value for this namespace, falling back to "auto" if nothing was saved.
 	profile := flagProfile
 	if profile == "" {
 		profile = os.Getenv("BACK2BASE_PROFILE")
@@ -90,17 +90,17 @@ func runClaude(cmd *cobra.Command, args []string) error {
 		if remembered.Profile != "" {
 			profile = remembered.Profile
 		} else {
-			profile = "full"
+			profile = "auto"
 		}
 	}
 	if profile == "" {
 		if prompt != "" {
-			// One-shot mode: default to remembered profile, else full,
+			// One-shot mode: default to remembered profile, else auto,
 			// without showing the interactive prompt.
 			if remembered.Profile != "" {
 				profile = remembered.Profile
 			} else {
-				profile = "full"
+				profile = "auto"
 			}
 		} else {
 			// Interactive mode: show selector, pre-selecting the
