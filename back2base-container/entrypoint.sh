@@ -15,6 +15,19 @@ else
   . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/status.sh"
 fi
 
+# Verbose-only logger. ALWAYS returns 0 so it is safe as the last command of
+# a function. The inline idiom
+#   [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo "..."
+# returns 1 when verbose is off; as a function's final command that return
+# value propagates and, under the top-level `set -e`, aborts the entrypoint
+# mid-startup. Route every verbose detail line through here instead.
+_vlog() {
+  if [ "${BACK2BASE_VERBOSE:-0}" = "1" ]; then
+    echo "$@"
+  fi
+  return 0
+}
+
 # Once any phase fails, demote every subsequent phase to chatty mode so
 # debugging output isn't lost behind the spinner.
 _FANCY_FAILED=0
@@ -108,7 +121,7 @@ if [ -d /repos ]; then
   REPO_DIR=$(find /repos -maxdepth 1 -mindepth 1 -type d | head -1)
   if [ -n "$REPO_DIR" ]; then
     cd "$REPO_DIR"
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: Working directory: $REPO_DIR"
+    _vlog ":: Working directory: $REPO_DIR"
   fi
 fi
 
@@ -134,7 +147,7 @@ if [ -z "${MEMORY_NAMESPACE:-}" ] && [ -d /workspace ]; then
     fi
   fi
   export MEMORY_NAMESPACE
-  [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: Memory namespace: $MEMORY_NAMESPACE"
+  _vlog ":: Memory namespace: $MEMORY_NAMESPACE"
 fi
 
 _phase2_workspace_setup() {
@@ -225,7 +238,7 @@ seed_if_missing() {
   if [ ! -e "$target_path" ] && [ -e "$default_path" ]; then
     mkdir -p "$(dirname "$target_path")"
     cp "$default_path" "$target_path"
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $target_path from defaults"
+    _vlog ":: seeded $target_path from defaults"
   fi
 }
 
@@ -259,7 +272,7 @@ filter_mcp_by_profile() {
     # ── Explicit profile (unchanged behavior) ──
     profile="$BACK2BASE_PROFILE"
     if [ "$profile" = "full" ]; then
-      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP profile: full (all servers)"
+      _vlog ":: MCP profile: full (all servers)"
       return 0
     fi
     if [ ! -f "$profiles_file" ] || [ ! -f "$mcp_file" ] || ! command -v jq &>/dev/null; then
@@ -298,7 +311,7 @@ filter_mcp_by_profile() {
     mv -f "$tmp" "$mcp_file"
     local count
     count=$(jq '.mcpServers | length' "$mcp_file")
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP profile: $profile ($count servers enabled)"
+    _vlog ":: MCP profile: $profile ($count servers enabled)"
   else
     rm -f "$tmp"
     echo ":: ⚠ MCP filtering failed, keeping full server set"
@@ -330,7 +343,7 @@ pull_mcp_images() {
   ' "$mcp_file" 2>/dev/null | sort -u)
 
   if [ -z "$images" ]; then
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: No Docker-based MCP servers in profile, skipping image pulls"
+    _vlog ":: No Docker-based MCP servers in profile, skipping image pulls"
     return 0
   fi
 
@@ -344,16 +357,16 @@ pull_mcp_images() {
   done <<< "$images"
 
   if [ -z "$missing" ]; then
-    [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP images already present, skipping pulls"
+    _vlog ":: MCP images already present, skipping pulls"
     return 0
   fi
 
-  [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: Pulling missing MCP server images..."
+  _vlog ":: Pulling missing MCP server images..."
   for img in $missing; do
     docker pull -q "$img" &
   done
   wait
-  [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: MCP images up to date"
+  _vlog ":: MCP images up to date"
 }
 
 _phase "Pulling MCP server images" pull_mcp_images
@@ -370,7 +383,7 @@ seed_skills_if_missing() {
       # outer if already verified the path is NOT a populated dir.
       rm -rf "$HOME/.claude/skills"
       cp -RL /opt/back2base/defaults/skills "$HOME/.claude/skills"
-      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/skills from image defaults"
+      _vlog ":: seeded $HOME/.claude/skills from image defaults"
     fi
   fi
 }
@@ -383,7 +396,7 @@ seed_agents_if_missing() {
     if [ -d "$defaults" ]; then
       rm -rf "$HOME/.claude/agents"
       cp -RL "$defaults" "$HOME/.claude/agents"
-      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/agents from image defaults"
+      _vlog ":: seeded $HOME/.claude/agents from image defaults"
     fi
   fi
 }
@@ -395,7 +408,7 @@ seed_commands_if_missing() {
     if [ -d /opt/back2base/defaults/commands ]; then
       rm -rf "$HOME/.claude/commands"
       cp -RL /opt/back2base/defaults/commands "$HOME/.claude/commands"
-      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/commands from image defaults"
+      _vlog ":: seeded $HOME/.claude/commands from image defaults"
     fi
   fi
 }
@@ -412,7 +425,7 @@ seed_plugins_if_missing() {
     if [ -d /opt/back2base/defaults/plugins ]; then
       rm -rf "$HOME/.claude/plugins"
       cp -RL /opt/back2base/defaults/plugins "$HOME/.claude/plugins"
-      [ "${BACK2BASE_VERBOSE:-0}" = "1" ] && echo ":: seeded $HOME/.claude/plugins from image defaults"
+      _vlog ":: seeded $HOME/.claude/plugins from image defaults"
     fi
   fi
 }
