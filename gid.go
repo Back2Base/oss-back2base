@@ -33,20 +33,25 @@ func probeDockerGID() string {
 	return gid
 }
 
+// resolveGID resolves the docker socket GID. Order: env override → cache
+// file → live probe (≈0.5–1.5s busybox spin-up; refreshes the cache) →
+// "999" default. The cache is consulted before probing because the socket
+// GID is effectively static per machine — if it ever changes (Docker
+// reinstall), delete the cache file or set BACK2BASE_DOCKER_GID.
 func resolveGID(envOverride, cacheFile string) string {
 	if envOverride != "" {
 		return envOverride
-	}
-
-	if probed := probeGIDFunc(); probed != "" {
-		os.WriteFile(cacheFile, []byte(probed), 0644)
-		return probed
 	}
 
 	if cached, err := os.ReadFile(cacheFile); err == nil {
 		if gid, ok := parseGIDOutput(string(cached)); ok {
 			return gid
 		}
+	}
+
+	if probed := probeGIDFunc(); probed != "" {
+		os.WriteFile(cacheFile, []byte(probed), 0644)
+		return probed
 	}
 
 	return "999"

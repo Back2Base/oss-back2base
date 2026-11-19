@@ -186,37 +186,38 @@ func runClaude(cmd *cobra.Command, args []string) error {
 	// We only need --no-cache --pull when a "critical" file actually changed
 	// — Dockerfile, top-level *.sh (entrypoint, init-firewall), or lib/*.sh
 	// (shell helpers shipped into the image). Anything else: a normal `build`
-	// is enough.
-	criticalHashPath := filepath.Join(s.cfg.Home, ".payload-critical-hash")
-	newHash, hashErr := criticalFilesHash(shipFS())
-	if hashErr != nil {
-		// If we can't hash, fall back to the conservative behavior:
-		// when payload was extracted, do a no-cache rebuild.
-		if s.extracted {
+	// is enough. When nothing was extracted this run, decideRebuild is a
+	// guaranteed no-op, so skip hashing the embedded FS entirely.
+	if s.extracted {
+		criticalHashPath := filepath.Join(s.cfg.Home, ".payload-critical-hash")
+		newHash, hashErr := criticalFilesHash(shipFS())
+		if hashErr != nil {
+			// If we can't hash, fall back to the conservative behavior:
+			// when payload was extracted, do a no-cache rebuild.
 			fmt.Fprintf(os.Stderr, ":: warning: hashing critical files failed (%v) — falling back to --no-cache --pull\n", hashErr)
 			if err := runBuild(true); err != nil {
 				return err
 			}
-		}
-	} else {
-		oldHash, _ := readCriticalHash(criticalHashPath)
-		rebuild, noCache := decideRebuild(s.extracted, oldHash, newHash)
-		if rebuild {
-			if noCache {
-				fmt.Fprintln(os.Stderr, ":: critical container files changed — rebuilding image (--no-cache --pull)")
-			} else {
-				fmt.Fprintln(os.Stderr, ":: container payload updated — rebuilding image (cached layers reused)")
-			}
-			if err := runBuild(noCache); err != nil {
-				return err
-			}
-			// Only persist the new hash after a successful no-cache rebuild
-			// — otherwise a half-finished upgrade could leave the cache
-			// claiming "all current" when the image hasn't actually been
-			// rebuilt with the new critical files.
-			if noCache {
-				if err := writeCriticalHash(criticalHashPath, newHash); err != nil {
-					fmt.Fprintf(os.Stderr, ":: warning: could not persist critical hash: %v\n", err)
+		} else {
+			oldHash, _ := readCriticalHash(criticalHashPath)
+			rebuild, noCache := decideRebuild(s.extracted, oldHash, newHash)
+			if rebuild {
+				if noCache {
+					fmt.Fprintln(os.Stderr, ":: critical container files changed — rebuilding image (--no-cache --pull)")
+				} else {
+					fmt.Fprintln(os.Stderr, ":: container payload updated — rebuilding image (cached layers reused)")
+				}
+				if err := runBuild(noCache); err != nil {
+					return err
+				}
+				// Only persist the new hash after a successful no-cache rebuild
+				// — otherwise a half-finished upgrade could leave the cache
+				// claiming "all current" when the image hasn't actually been
+				// rebuilt with the new critical files.
+				if noCache {
+					if err := writeCriticalHash(criticalHashPath, newHash); err != nil {
+						fmt.Fprintf(os.Stderr, ":: warning: could not persist critical hash: %v\n", err)
+					}
 				}
 			}
 		}
@@ -269,16 +270,30 @@ func resolveNamespace(repoPath string) string {
 	return ns
 }
 
+// gitRootCache memoizes gitRoot per directory. A launch calls gitRoot for
+// the cwd (resolveRepoPath) and again for the resolved root
+// (resolveNamespace); caching the result under both keys saves the second
+// `git rev-parse` subprocess.
+var gitRootCache = map[string]string{}
+
 // gitRoot returns the repo root containing dir, or "" if not in a git tree.
 func gitRoot(dir string) string {
 	if dir == "" {
 		return ""
 	}
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
+	if root, ok := gitRootCache[dir]; ok {
+		return root
 	}
-	return strings.TrimSpace(string(out))
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	root := ""
+	if err == nil {
+		root = strings.TrimSpace(string(out))
+	}
+	gitRootCache[dir] = root
+	if root != "" {
+		gitRootCache[root] = root // the root's root is itself
+	}
+	return root
 }
 
 // criticalFilesHash computes a sha256 over the files whose contents directly

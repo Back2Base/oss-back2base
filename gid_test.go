@@ -69,3 +69,39 @@ func TestGIDEnvOverride(t *testing.T) {
 		t.Errorf("gid = %q, want 42 from env", gid)
 	}
 }
+
+func TestGIDCachePreferredOverProbe(t *testing.T) {
+	orig := probeGIDFunc
+	probeCalled := false
+	probeGIDFunc = func() string { probeCalled = true; return "111" }
+	defer func() { probeGIDFunc = orig }()
+
+	dir := t.TempDir()
+	cacheFile := filepath.Join(dir, "docker-gid")
+	os.WriteFile(cacheFile, []byte("991"), 0644)
+
+	gid := resolveGID("", cacheFile)
+	if gid != "991" {
+		t.Errorf("gid = %q, want 991 from cache", gid)
+	}
+	if probeCalled {
+		t.Error("probe ran despite valid cache — cache must be consulted first")
+	}
+}
+
+func TestGIDProbeWritesCache(t *testing.T) {
+	orig := probeGIDFunc
+	probeGIDFunc = func() string { return "555" }
+	defer func() { probeGIDFunc = orig }()
+
+	dir := t.TempDir()
+	cacheFile := filepath.Join(dir, "docker-gid") // doesn't exist yet
+
+	if gid := resolveGID("", cacheFile); gid != "555" {
+		t.Errorf("gid = %q, want 555 from probe", gid)
+	}
+	cached, err := os.ReadFile(cacheFile)
+	if err != nil || string(cached) != "555" {
+		t.Errorf("cache = %q (err %v), want 555 persisted", cached, err)
+	}
+}

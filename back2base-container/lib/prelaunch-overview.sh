@@ -38,6 +38,22 @@ run_prelaunch_overview() {
     return 0
   fi
 
+  # Content-address the overview by the repo's HEAD tree hash. The overview
+  # output is non-deterministic, so regenerating it every start rewrites
+  # CLAUDE.md and makes the whole system prompt cache-cold. ~/.claude is a
+  # persistent host mount, so the stored hash survives container restarts.
+  # Known limitation: uncommitted worktree changes don't alter HEAD^{tree},
+  # so dirty-only changes won't regenerate — acceptable for a coarse overview.
+  local tree_hash hash_file
+  hash_file="$HOME/.claude/.overview-tree-hash"
+  tree_hash=$(git -C "$PWD" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")
+  if [ -n "$tree_hash" ] && [ -f "$hash_file" ] \
+      && [ "$(cat "$hash_file" 2>/dev/null)" = "$tree_hash" ] \
+      && grep -q 'back2base:overview-begin' "$claude_md" 2>/dev/null; then
+    echo ":: overview: repo unchanged (tree ${tree_hash:0:8}…) — keeping existing overview" >&2
+    return 0
+  fi
+
   local prompt
   prompt="$(cat "$prompt_path")"
 
@@ -148,6 +164,11 @@ run_prelaunch_overview() {
     echo ":: ⚠ overview render failed; CLAUDE.md unchanged" >&2
     rm -f "$tmp_out" "$tmp_err"
     return 0
+  fi
+
+  # Stamp the tree hash so the next start with an unchanged repo skips.
+  if [ -n "$tree_hash" ]; then
+    echo "$tree_hash" > "$hash_file" 2>/dev/null || true
   fi
 
   local lines
